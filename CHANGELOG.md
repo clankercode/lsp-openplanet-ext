@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-04-12
+
 ### Added
 
 - Monorepo skeleton: pnpm workspace, TypeScript base config, ESLint flat config, Prettier, justfile.
