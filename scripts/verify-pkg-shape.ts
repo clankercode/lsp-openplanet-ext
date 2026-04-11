@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import process from 'node:process';
 
 export interface ShapeResult {
@@ -72,5 +73,8 @@ function main(): void {
   if (failed) process.exit(1);
 }
 
-const isMain = import.meta.url === `file://${process.argv[1]}`;
-if (isMain) main();
+// Robust main-detection that works across platforms (Linux, macOS, Windows).
+// `fileURLToPath` turns the module URL into an OS-native filesystem path, which
+// we can compare directly to `process.argv[1]` (also an OS-native path).
+const scriptPath = fileURLToPath(import.meta.url);
+if (process.argv[1] === scriptPath) main();
