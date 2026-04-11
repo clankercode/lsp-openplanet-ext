@@ -1,0 +1,16 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  placeholder:
+    name: Release Placeholder
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "Release pipeline lands in M8."
+      - run: echo "Will validate tag, build binaries, stage platform packages, create GitHub Release,"
+      - run: echo "then fan out to publish-npm / publish-vsce / publish-ovsx gated on secrets."

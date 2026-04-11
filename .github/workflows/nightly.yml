@@ -1,0 +1,16 @@
+name: Nightly
+
+# Disabled by default — enable in M8 by removing `if: false` and setting a schedule.
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  nightly:
+    name: Nightly Build
+    runs-on: ubuntu-latest
+    if: false
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "Nightly build against openplanet-lsp@main lands in M8."

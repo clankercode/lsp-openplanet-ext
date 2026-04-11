@@ -1,0 +1,20 @@
+name: Publish VSCE
+
+on:
+  workflow_call:
+    secrets:
+      VSCE_PAT:
+        required: true
+
+jobs:
+  gate:
+    name: Publish Gate
+    runs-on: ubuntu-latest
+    environment: vsce
+    steps:
+      - run: |
+          if [ -z "${{ secrets.VSCE_PAT }}" ]; then
+            echo "::notice::VSCE_PAT not configured; skipping publish."
+            exit 0
+          fi
+          echo "publish-vsce pipeline lands in M8."
