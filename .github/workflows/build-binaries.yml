@@ -73,7 +73,7 @@ jobs:
             apt_packages: gcc-aarch64-linux-gnu
             linker: aarch64-linux-gnu-gcc
           - node_target: darwin-x64
-            runner: macos-13
+            runner: macos-latest
             rust_target: x86_64-apple-darwin
             bin_ext: ''
             apt_packages: ''
