@@ -54,9 +54,43 @@ jobs:
     needs: validate
     uses: ./.github/workflows/build-binaries.yml
 
+  build-vsix:
+    name: Build VSIX
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build grammar
+        run: pnpm exec tsx packages/grammar/build.ts
+      - name: Build extension
+        working-directory: packages/vscode-ext
+        run: pnpm build
+      - name: Package VSIX
+        working-directory: packages/vscode-ext
+        run: |
+          is_dry="${{ needs.validate.outputs.is_dry }}"
+          if [ "$is_dry" = "true" ]; then
+            pnpm package:pre
+          else
+            pnpm package
+          fi
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vsix
+          path: packages/vscode-ext/*.vsix
+          if-no-files-found: error
+          retention-days: 7
+
   release:
     name: Create GitHub Release
-    needs: [validate, build]
+    needs: [validate, build, build-vsix]
     runs-on: ubuntu-latest
     outputs:
       release_url: ${{ steps.create.outputs.url }}
@@ -74,6 +108,12 @@ jobs:
         with:
           path: binary-artifacts
           pattern: openplanet-lsp-*
+
+      - name: Download VSIX artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: vsix
+          path: vsix-artifacts
 
       - name: Archive binaries
         shell: bash
@@ -98,6 +138,10 @@ jobs:
           done
           ls -la release-assets
 
+      - name: Copy VSIX to release assets
+        shell: bash
+        run: cp vsix-artifacts/*.vsix release-assets/
+
       - name: Generate SHA-256 checksums
         shell: bash
         working-directory: release-assets
@@ -107,7 +151,7 @@ jobs:
           # Compute into a tempfile then move in, so the glob can never
           # include the partially-written output file.
           tmp=$(mktemp)
-          sha256sum *.tar.gz *.zip > "$tmp"
+          sha256sum *.tar.gz *.zip *.vsix > "$tmp"
           mv "$tmp" SHA256SUMS
           cat SHA256SUMS
 

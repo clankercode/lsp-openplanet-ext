@@ -37,5 +37,8 @@ Thumbs.db
 packages/npm-lsp-platforms/*/bin/
 packages/vscode-ext/bin/
 
+# VSIX build outputs
+*.vsix
+
 # Superpowers goal-loops runtime state (transient planning artifacts)
 .goal-loops/

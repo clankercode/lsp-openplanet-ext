@@ -8,8 +8,18 @@ export interface ShapeResult {
   errors: string[];
 }
 
-const REQUIRED_FIELDS = ['name', 'version', 'type', 'main', 'types', 'files', 'scripts'] as const;
+const REQUIRED_FIELDS = ['name', 'version', 'main', 'scripts'] as const;
+// npm / shared-library packages additionally need type declarations + a
+// published files list; VS Code extensions are private CJS bundles, so
+// they're exempt from those extra rules.
+const LIBRARY_EXTRA_FIELDS = ['type', 'types', 'files'] as const;
 const REQUIRED_SCRIPTS = ['test', 'typecheck'] as const;
+
+/** Returns true if the package is a VS Code extension (has engines.vscode). */
+function isVscodeExtension(p: Record<string, unknown>): boolean {
+  const engines = p.engines as Record<string, unknown> | undefined;
+  return typeof engines?.vscode === 'string';
+}
 
 export function verifyPackageShape(pkg: unknown, path: string): ShapeResult {
   const errors: string[] = [];
@@ -17,6 +27,7 @@ export function verifyPackageShape(pkg: unknown, path: string): ShapeResult {
     return { ok: false, errors: [`${path}: not a JSON object`] };
   }
   const p = pkg as Record<string, unknown>;
+  const vsix = isVscodeExtension(p);
 
   for (const field of REQUIRED_FIELDS) {
     if (!(field in p)) {
@@ -24,8 +35,15 @@ export function verifyPackageShape(pkg: unknown, path: string): ShapeResult {
     }
   }
 
-  if ('type' in p && p.type !== 'module') {
-    errors.push(`${path}: "type" must be "module" (got ${JSON.stringify(p.type)})`);
+  if (!vsix) {
+    for (const field of LIBRARY_EXTRA_FIELDS) {
+      if (!(field in p)) {
+        errors.push(`${path}: missing required field "${field}"`);
+      }
+    }
+    if ('type' in p && p.type !== 'module') {
+      errors.push(`${path}: "type" must be "module" (got ${JSON.stringify(p.type)})`);
+    }
   }
 
   const scripts = (p.scripts ?? {}) as Record<string, unknown>;

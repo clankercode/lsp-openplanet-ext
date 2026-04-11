@@ -15,25 +15,18 @@ export function parseVersion(version: string): Version {
   }
   const parts = version.split('.');
   if (parts.length !== 3) {
-    throw new Error(
-      `Version must be semver MAJOR.MINOR.PATCH (got ${JSON.stringify(version)})`,
-    );
+    throw new Error(`Version must be semver MAJOR.MINOR.PATCH (got ${JSON.stringify(version)})`);
   }
   const major = Number.parseInt(parts[0]!, 10);
   const minor = Number.parseInt(parts[1]!, 10);
   const patch = Number.parseInt(parts[2]!, 10);
   if (!Number.isFinite(major) || !Number.isFinite(minor) || !Number.isFinite(patch)) {
-    throw new Error(
-      `Version parts must be integers (got ${JSON.stringify(version)})`,
-    );
+    throw new Error(`Version parts must be integers (got ${JSON.stringify(version)})`);
   }
   return { major, minor, patch };
 }
 
-export function bumpVersion(
-  version: string,
-  level: 'major' | 'minor' | 'patch',
-): string {
+export function bumpVersion(version: string, level: 'major' | 'minor' | 'patch'): string {
   const v = parseVersion(version);
   switch (level) {
     case 'major':

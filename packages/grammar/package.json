@@ -1,0 +1,27 @@
+{
+  "name": "grammar",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./angelscript.tmLanguage.json": "./syntaxes/angelscript.tmLanguage.json"
+  },
+  "files": [
+    "dist",
+    "syntaxes"
+  ],
+  "scripts": {
+    "build": "tsx build.ts",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "yaml": "^2.4.0"
+  }
+}

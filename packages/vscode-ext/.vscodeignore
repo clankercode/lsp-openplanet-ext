@@ -1,0 +1,7 @@
+.vscode/**
+src/**
+node_modules/**
+*.vsix
+esbuild.mjs
+tsconfig.json
+.eslintrc*

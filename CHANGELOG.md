@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-04-12
+
+### Added
+
+- `packages/grammar`: AngelScript TextMate grammar authored in YAML, compiled to JSON via `build.ts`. Covers keywords, types, control flow, operators, comments, strings, numeric literals, and escape sequences.
+- `packages/vscode-ext`: VS Code extension (`openplanet-lsp-vscode`). Contributes the AngelScript language (`*.as`), TextMate grammar, bracket/comment configuration, and an LSP client that launches `openplanet-lsp` as a stdio language server. Binary resolution order: `openplanetLsp.serverPath` setting → bundled `bin/` (populated at release time) → PATH.
+- `scripts/bump-version.ts`: Updates all workspace `package.json` files to a given version. 10 unit tests.
+- Release pipeline now builds a VSIX (`openplanet-lsp-vscode-vX.Y.Z.vsix`) in parallel with the binary matrix and attaches it to every GitHub Release alongside the platform binary archives and `SHA256SUMS`.
+- `just build-grammar`, `just build-vsce`, `just bump VERSION`, `just pre-release-check VERSION` recipes.
+- `verify-pkg-shape.ts`: VS Code extensions (detected via `engines.vscode`) are exempt from the `type: module` + `types` + `files` requirements, since they are private CJS bundles. New test covering this case.
+
 ## [0.1.0] - 2026-04-12
 
 ### Added

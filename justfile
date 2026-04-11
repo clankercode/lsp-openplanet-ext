@@ -43,6 +43,16 @@ lint-workflows:
 
 ci: lint format-check typecheck build test verify-pkg-shape verify-ci-parity lint-workflows
 
+# ─── grammar / vscode-ext ─────────────────────────────────────────────────
+# Compile AngelScript grammar YAML → JSON and copy to vscode-ext/syntaxes/.
+build-grammar:
+    pnpm exec tsx packages/grammar/build.ts
+
+# Build and package the VS Code extension VSIX.
+build-vsce:
+    pnpm --filter openplanet-lsp-vscode build
+    pnpm --filter openplanet-lsp-vscode package
+
 # ─── release helpers ──────────────────────────────────────────────────────
 # Bump all workspace package.json files to a new version.
 bump VERSION:

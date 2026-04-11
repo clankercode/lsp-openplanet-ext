@@ -1,0 +1,102 @@
+{
+  "name": "AngelScript",
+  "scopeName": "source.angelscript",
+  "fileTypes": [
+    "as"
+  ],
+  "patterns": [
+    {
+      "include": "#comment-line"
+    },
+    {
+      "include": "#comment-block"
+    },
+    {
+      "include": "#string"
+    },
+    {
+      "include": "#keyword-type"
+    },
+    {
+      "include": "#keyword-control"
+    },
+    {
+      "include": "#keyword-other"
+    },
+    {
+      "include": "#constant-language"
+    },
+    {
+      "include": "#constant-numeric"
+    },
+    {
+      "include": "#operator"
+    }
+  ],
+  "repository": {
+    "comment-line": {
+      "name": "comment.line.double-slash.angelscript",
+      "match": "//.*$"
+    },
+    "comment-block": {
+      "name": "comment.block.angelscript",
+      "begin": "/\\*",
+      "end": "\\*/",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.comment.begin.angelscript"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.comment.end.angelscript"
+        }
+      }
+    },
+    "string": {
+      "name": "string.quoted.double.angelscript",
+      "begin": "\"",
+      "end": "\"",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.begin.angelscript"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.end.angelscript"
+        }
+      },
+      "patterns": [
+        {
+          "name": "constant.character.escape.angelscript",
+          "match": "\\\\."
+        }
+      ]
+    },
+    "keyword-type": {
+      "name": "storage.type.angelscript",
+      "match": "\\b(void|bool|int|int8|int16|int32|int64|uint|uint8|uint16|uint32|uint64|float|double|string|array|dictionary|ref|auto)\\b"
+    },
+    "keyword-control": {
+      "name": "keyword.control.angelscript",
+      "match": "\\b(if|else|while|for|do|return|break|continue|switch|case|default|try|catch|throw)\\b"
+    },
+    "keyword-other": {
+      "name": "keyword.other.angelscript",
+      "match": "\\b(class|interface|enum|namespace|import|from|funcdef|mixin|shared|external|abstract|final|override|explicit|property|const|in|out|inout|this|super|cast)\\b"
+    },
+    "constant-language": {
+      "name": "constant.language.angelscript",
+      "match": "\\b(true|false|null)\\b"
+    },
+    "constant-numeric": {
+      "name": "constant.numeric.angelscript",
+      "match": "\\b([0-9]+(\\.[0-9]*)?(f|lf)?|0x[0-9a-fA-F]+)\\b"
+    },
+    "operator": {
+      "name": "keyword.operator.angelscript",
+      "match": "(\\+\\+|--|<<|>>|<=|>=|==|!=|&&|\\|\\||[+\\-*/%&|^~!<>=?:])"
+    }
+  }
+}

@@ -40,4 +40,19 @@ describe('verifyPackageShape', () => {
     expect(result.ok).toBe(false);
     expect(result.errors.join('\n')).toMatch(/type.*module/);
   });
+
+  it('allows commonjs type and skips types/files checks for VS Code extensions', () => {
+    const pkg = {
+      name: 'openplanet-lsp-vscode',
+      version: '0.1.0',
+      type: 'commonjs',
+      main: './dist/extension.js',
+      engines: { vscode: '^1.82.0' },
+      scripts: { test: 'echo ok', typecheck: 'tsc --noEmit' },
+      // no "types" or "files" fields — valid for a VS Code extension
+    };
+    const result = verifyPackageShape(pkg, 'packages/vscode-ext/package.json');
+    expect(result.ok).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
 });

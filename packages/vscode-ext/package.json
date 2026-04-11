@@ -1,0 +1,73 @@
+{
+  "name": "openplanet-lsp-vscode",
+  "displayName": "OpenPlanet LSP",
+  "description": "Language support for OpenPlanet AngelScript plugins (openplanet-lsp wrapper)",
+  "version": "0.2.0",
+  "private": true,
+  "publisher": "clankercode",
+  "license": "Unlicense",
+  "type": "commonjs",
+  "engines": {
+    "vscode": "^1.82.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters"
+  ],
+  "keywords": [
+    "openplanet",
+    "angelscript",
+    "trackmania",
+    "lsp"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/clankercode/lsp-openplanet-ext"
+  },
+  "main": "./dist/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "angelscript",
+        "aliases": [
+          "AngelScript",
+          "angelscript"
+        ],
+        "extensions": [
+          ".as"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "angelscript",
+        "scopeName": "source.angelscript",
+        "path": "./syntaxes/angelscript.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "title": "OpenPlanet LSP",
+      "properties": {
+        "openplanetLsp.serverPath": {
+          "type": "string",
+          "default": "",
+          "description": "Override path to the openplanet-lsp binary. Leave empty to use the bundled or PATH-resolved binary."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "test": "echo 'Extension integration tests land in M4/M6' && exit 0",
+    "typecheck": "tsc --noEmit",
+    "package": "vsce package --no-dependencies",
+    "package:pre": "vsce package --pre-release --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.82.0",
+    "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.21.0",
+    "vscode-languageclient": "^9.0.1"
+  }
+}
