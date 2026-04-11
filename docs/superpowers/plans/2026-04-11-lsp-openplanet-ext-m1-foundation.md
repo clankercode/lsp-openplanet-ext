@@ -392,7 +392,11 @@ dist
 .cache
 pnpm-lock.yaml
 coverage
+docs/
+.goal-loops/
 ```
+
+Note: `docs/` is excluded because the design spec and implementation plans are hand-authored long-form markdown with careful table/code-block layout that Prettier's line-wrapping would damage. `.goal-loops/` is transient planning-system state that lives outside the repo's committed surface.
 
 - [ ] **Step 4: Verify lint runs on an empty repo without errors**
 
