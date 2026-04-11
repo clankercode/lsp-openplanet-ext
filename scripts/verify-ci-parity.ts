@@ -4,6 +4,11 @@ import process from 'node:process';
 
 const EXCLUDED = new Set(['pnpm install --frozen-lockfile', 'pnpm install']);
 
+// YAML block-scalar indicators that appear on a `run:` line when the command
+// body is on subsequent lines (`run: |`, `run: >-`, etc.). These are not
+// commands and must not poison the extracted set.
+const YAML_BLOCK_SCALARS = new Set(['|', '|-', '|+', '>', '>-', '>+']);
+
 /**
  * Extracts `run:` values from a GitHub Actions workflow YAML.
  * Returns a set of distinct shell commands. Intentionally primitive — we
@@ -22,6 +27,7 @@ export function extractCiCommands(yaml: string): Set<string> {
       cmd = cmd.slice(1, -1);
     }
     if (EXCLUDED.has(cmd)) continue;
+    if (YAML_BLOCK_SCALARS.has(cmd)) continue;
     cmds.add(cmd);
   }
   return cmds;

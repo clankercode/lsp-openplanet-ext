@@ -1,20 +1,161 @@
 name: Build Binaries
 
-# Reusable workflow: called by integration.yml and release.yml once those
-# actually need to build the Rust binary. Not yet wired up.
+# Reusable workflow that cross-builds the openplanet-lsp Rust binary for every
+# supported target and uploads each build as a named artifact. Called by
+# release.yml (tag push) and can also be dispatched for debugging.
 on:
   workflow_call:
     inputs:
       ref:
-        description: 'openplanet-lsp git ref to build'
+        description: 'openplanet-lsp git ref to build (overrides BINARY_REF)'
+        required: false
+        type: string
+        default: ''
+      upload-prefix:
+        description: 'Artifact name prefix'
+        required: false
+        type: string
+        default: 'openplanet-lsp'
+    outputs:
+      ref:
+        description: 'The resolved openplanet-lsp git ref'
+        value: ${{ jobs.resolve-ref.outputs.ref }}
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'openplanet-lsp git ref to build (overrides BINARY_REF)'
         required: false
         type: string
         default: ''
 
 jobs:
-  placeholder:
-    name: Placeholder
+  resolve-ref:
+    name: Resolve BINARY_REF
     runs-on: ubuntu-latest
+    outputs:
+      ref: ${{ steps.pick.outputs.ref }}
     steps:
-      - run: echo "Binary build pipeline lands in M2/M3."
-      - run: echo "Will read BINARY_REF, clone openplanet-lsp, cargo build --release --target X."
+      - uses: actions/checkout@v4
+      - id: pick
+        shell: bash
+        run: |
+          set -euo pipefail
+          override='${{ inputs.ref }}'
+          if [ -n "$override" ]; then
+            ref="$override"
+          else
+            ref=$(tr -d ' \t\r\n' < BINARY_REF)
+          fi
+          if [ -z "$ref" ]; then
+            echo "::error::BINARY_REF is empty and no override provided"
+            exit 1
+          fi
+          echo "Resolved openplanet-lsp ref: $ref"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.node_target }}
+    needs: resolve-ref
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - node_target: linux-x64
+            runner: ubuntu-latest
+            rust_target: x86_64-unknown-linux-gnu
+            bin_ext: ''
+            apt_packages: ''
+            linker: ''
+          - node_target: linux-arm64
+            runner: ubuntu-latest
+            rust_target: aarch64-unknown-linux-gnu
+            bin_ext: ''
+            apt_packages: gcc-aarch64-linux-gnu
+            linker: aarch64-linux-gnu-gcc
+          - node_target: darwin-x64
+            runner: macos-13
+            rust_target: x86_64-apple-darwin
+            bin_ext: ''
+            apt_packages: ''
+            linker: ''
+          - node_target: darwin-arm64
+            runner: macos-latest
+            rust_target: aarch64-apple-darwin
+            bin_ext: ''
+            apt_packages: ''
+            linker: ''
+          - node_target: win32-x64
+            runner: windows-latest
+            rust_target: x86_64-pc-windows-msvc
+            bin_ext: '.exe'
+            apt_packages: ''
+            linker: ''
+          - node_target: win32-arm64
+            runner: windows-latest
+            rust_target: aarch64-pc-windows-msvc
+            bin_ext: '.exe'
+            apt_packages: ''
+            linker: ''
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout wrapper repo
+        uses: actions/checkout@v4
+
+      - name: Checkout openplanet-lsp
+        uses: actions/checkout@v4
+        with:
+          repository: clankercode/lsp-openplanet
+          ref: ${{ needs.resolve-ref.outputs.ref }}
+          path: openplanet-lsp-src
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - name: Install Linux cross-compile toolchain
+        if: matrix.apt_packages != ''
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.apt_packages }}
+
+      - name: Configure cross-linker
+        if: matrix.linker != ''
+        shell: bash
+        run: |
+          triple_upper=$(echo "${{ matrix.rust_target }}" | tr '[:lower:]-' '[:upper:]_')
+          echo "CARGO_TARGET_${triple_upper}_LINKER=${{ matrix.linker }}" >> "$GITHUB_ENV"
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: openplanet-lsp-src
+          key: ${{ matrix.rust_target }}
+
+      - name: Build openplanet-lsp
+        working-directory: openplanet-lsp-src
+        shell: bash
+        run: cargo build --release --target ${{ matrix.rust_target }}
+
+      - name: Stage binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p staged
+          src="openplanet-lsp-src/target/${{ matrix.rust_target }}/release/openplanet-lsp${{ matrix.bin_ext }}"
+          if [ ! -f "$src" ]; then
+            echo "::error::Expected binary not found at $src"
+            ls -la "openplanet-lsp-src/target/${{ matrix.rust_target }}/release/" || true
+            exit 1
+          fi
+          cp "$src" "staged/openplanet-lsp${{ matrix.bin_ext }}"
+          ls -la staged
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.upload-prefix }}-${{ matrix.node_target }}
+          path: staged/openplanet-lsp${{ matrix.bin_ext }}
+          if-no-files-found: error
+          retention-days: 7

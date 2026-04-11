@@ -1,20 +1,26 @@
 name: Publish Open VSX
 
+# Called from release.yml after the GitHub Release is created. Gated on
+# OVSX_PAT: if the secret is absent the job logs a notice and exits 0, so
+# unconfigured forks can still run the release pipeline end-to-end.
+#
+# Full publish flow (six platform-specific VSIXs) lands with the vscode-ext
+# package in M4/M6.
+
 on:
   workflow_call:
-    secrets:
-      OVSX_PAT:
-        required: true
+  workflow_dispatch:
 
 jobs:
-  gate:
+  publish:
     name: Publish Gate
     runs-on: ubuntu-latest
-    environment: ovsx
     steps:
-      - run: |
+      - name: Check OVSX_PAT
+        shell: bash
+        run: |
           if [ -z "${{ secrets.OVSX_PAT }}" ]; then
-            echo "::notice::OVSX_PAT not configured; skipping publish."
+            echo "::notice::OVSX_PAT not configured; skipping Open VSX publish."
             exit 0
           fi
-          echo "publish-ovsx pipeline lands in M8."
+          echo "::notice::OVSX_PAT present; full publish pipeline lands in M4/M6."

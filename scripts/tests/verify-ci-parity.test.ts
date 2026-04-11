@@ -28,6 +28,30 @@ jobs:
     expect(cmds).toContain('pnpm test');
     expect(cmds).not.toContain('pnpm install --frozen-lockfile');
   });
+
+  it('ignores YAML block-scalar markers (| and >) and treats the block body as opaque', () => {
+    const yaml = `
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install
+        run: |
+          curl -L https://example/tool | bash
+          ./tool --check
+      - run: pnpm lint
+      - name: Folded
+        run: >
+          pnpm run
+          everything
+`;
+    const cmds = extractCiCommands(yaml);
+    // Block-scalar markers ("|", ">") must not leak in as commands.
+    expect(cmds).not.toContain('|');
+    expect(cmds).not.toContain('>');
+    // Single-line run: still works.
+    expect(cmds).toContain('pnpm lint');
+  });
 });
 
 describe('extractJustCiCommands', () => {

@@ -1,20 +1,26 @@
 name: Publish npm
 
+# Called from release.yml after the GitHub Release is created. Gated on
+# NPM_TOKEN: if the secret is absent the job logs a notice and exits 0, so
+# unconfigured forks can still run the release pipeline end-to-end.
+#
+# Full publish flow (platform packages first, then the umbrella package with
+# --provenance) lands with the npm-lsp package in M2/M3.
+
 on:
   workflow_call:
-    secrets:
-      NPM_TOKEN:
-        required: true
+  workflow_dispatch:
 
 jobs:
-  gate:
+  publish:
     name: Publish Gate
     runs-on: ubuntu-latest
-    environment: npm
     steps:
-      - run: |
+      - name: Check NPM_TOKEN
+        shell: bash
+        run: |
           if [ -z "${{ secrets.NPM_TOKEN }}" ]; then
-            echo "::notice::NPM_TOKEN not configured; skipping publish."
+            echo "::notice::NPM_TOKEN not configured; skipping npm publish."
             exit 0
           fi
-          echo "publish-npm pipeline lands in M8."
+          echo "::notice::NPM_TOKEN present; full publish pipeline lands in M2/M3."

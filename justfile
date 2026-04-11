@@ -35,4 +35,19 @@ verify-pkg-shape:
 verify-ci-parity:
     pnpm exec tsx scripts/verify-ci-parity.ts
 
-ci: lint format-check typecheck build test verify-pkg-shape verify-ci-parity
+# Requires `actionlint` on PATH. Install via:
+#   go install github.com/rhysd/actionlint/cmd/actionlint@latest
+#   # or: pacman -S actionlint / brew install actionlint
+lint-workflows:
+    actionlint -no-color
+
+ci: lint format-check typecheck build test verify-pkg-shape verify-ci-parity lint-workflows
+
+# ─── release helpers ──────────────────────────────────────────────────────
+# Validate a release tag locally before pushing it.
+validate-release-tag TAG:
+    pnpm exec tsx scripts/validate-release-tag.ts {{TAG}}
+
+# Print the CHANGELOG section for a version (or "Unreleased").
+extract-changelog VERSION:
+    pnpm exec tsx scripts/extract-changelog.ts {{VERSION}}

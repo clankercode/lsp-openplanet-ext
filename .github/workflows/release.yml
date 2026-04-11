@@ -1,16 +1,179 @@
 name: Release
 
+# End-to-end release: tag push → tag validation → binary build → GitHub
+# Release creation (with CHANGELOG body + binary archives attached) → publish
+# fan-out (npm / VS Code Marketplace / Open VSX, each gated on secrets).
+#
+# Dry-run release: tag with a -dry prerelease suffix (e.g. v0.1.0-dry). All
+# steps run EXCEPT the publish-* fan-out. This lets maintainers exercise the
+# full pipeline before configuring any publish secrets.
+
 on:
   push:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  placeholder:
-    name: Release Placeholder
+  validate:
+    name: Validate Tag
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.parse.outputs.version }}
+      base_version: ${{ steps.parse.outputs.base_version }}
+      is_dry: ${{ steps.parse.outputs.is_dry }}
     steps:
       - uses: actions/checkout@v4
-      - run: echo "Release pipeline lands in M8."
-      - run: echo "Will validate tag, build binaries, stage platform packages, create GitHub Release,"
-      - run: echo "then fan out to publish-npm / publish-vsce / publish-ovsx gated on secrets."
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - id: parse
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          echo "Validating tag: $tag"
+          pnpm exec tsx scripts/validate-release-tag.ts "$tag"
+          info=$(pnpm exec tsx scripts/validate-release-tag.ts "$tag" --json)
+          echo "Parsed tag info: $info"
+          echo "version=$(echo "$info" | jq -r .version)" >> "$GITHUB_OUTPUT"
+          echo "base_version=$(echo "$info" | jq -r .baseVersion)" >> "$GITHUB_OUTPUT"
+          echo "is_dry=$(echo "$info" | jq -r .isDry)" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build Binaries
+    needs: validate
+    uses: ./.github/workflows/build-binaries.yml
+
+  release:
+    name: Create GitHub Release
+    needs: [validate, build]
+    runs-on: ubuntu-latest
+    outputs:
+      release_url: ${{ steps.create.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Download binary artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: binary-artifacts
+          pattern: openplanet-lsp-*
+
+      - name: Archive binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          version="${{ needs.validate.outputs.version }}"
+          for dir in binary-artifacts/*/; do
+            artifact=$(basename "$dir")
+            node_target="${artifact#openplanet-lsp-}"
+            case "$node_target" in
+              win32-*)
+                archive="release-assets/openplanet-lsp-v${version}-${node_target}.zip"
+                (cd "$dir" && zip -q -r "${GITHUB_WORKSPACE}/${archive}" .)
+                ;;
+              *)
+                archive="release-assets/openplanet-lsp-v${version}-${node_target}.tar.gz"
+                tar -C "$dir" -czf "$archive" .
+                ;;
+            esac
+            echo "Packaged $archive"
+          done
+          ls -la release-assets
+
+      - name: Generate SHA-256 checksums
+        shell: bash
+        working-directory: release-assets
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          # Compute into a tempfile then move in, so the glob can never
+          # include the partially-written output file.
+          tmp=$(mktemp)
+          sha256sum *.tar.gz *.zip > "$tmp"
+          mv "$tmp" SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Extract changelog body
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_version="${{ needs.validate.outputs.base_version }}"
+          is_dry="${{ needs.validate.outputs.is_dry }}"
+          section="$base_version"
+          if [ "$is_dry" = "true" ]; then
+            # Dry runs may tag before a versioned section exists; fall back
+            # to [Unreleased] if the versioned section is missing.
+            if ! pnpm exec tsx scripts/extract-changelog.ts "$base_version" > /dev/null 2>&1; then
+              echo "No [$base_version] section found; using [Unreleased] for dry-run."
+              section=Unreleased
+            fi
+          fi
+          pnpm exec tsx scripts/extract-changelog.ts "$section" > release-notes.md
+          echo "--- release body (from [$section]) ---"
+          cat release-notes.md
+          echo "--- end ---"
+
+      - name: Create GitHub Release
+        id: create
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          is_dry="${{ needs.validate.outputs.is_dry }}"
+          flags=()
+          if [ "$is_dry" = "true" ]; then
+            flags+=(--prerelease)
+          fi
+          gh release create "$tag" \
+            --title "$tag" \
+            --notes-file release-notes.md \
+            "${flags[@]}" \
+            release-assets/*
+          url=$(gh release view "$tag" --json url -q .url)
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Release: $url"
+
+  publish-npm:
+    name: Publish npm
+    needs: [validate, release]
+    if: needs.validate.outputs.is_dry != 'true'
+    uses: ./.github/workflows/publish-npm.yml
+    secrets: inherit
+
+  publish-vsce:
+    name: Publish VS Code Marketplace
+    needs: [validate, release]
+    if: needs.validate.outputs.is_dry != 'true'
+    uses: ./.github/workflows/publish-vsce.yml
+    secrets: inherit
+
+  publish-ovsx:
+    name: Publish Open VSX
+    needs: [validate, release]
+    if: needs.validate.outputs.is_dry != 'true'
+    uses: ./.github/workflows/publish-ovsx.yml
+    secrets: inherit

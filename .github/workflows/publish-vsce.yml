@@ -1,20 +1,26 @@
 name: Publish VSCE
 
+# Called from release.yml after the GitHub Release is created. Gated on
+# VSCE_PAT: if the secret is absent the job logs a notice and exits 0, so
+# unconfigured forks can still run the release pipeline end-to-end.
+#
+# Full publish flow (six platform-specific VSIXs) lands with the vscode-ext
+# package in M4/M6.
+
 on:
   workflow_call:
-    secrets:
-      VSCE_PAT:
-        required: true
+  workflow_dispatch:
 
 jobs:
-  gate:
+  publish:
     name: Publish Gate
     runs-on: ubuntu-latest
-    environment: vsce
     steps:
-      - run: |
+      - name: Check VSCE_PAT
+        shell: bash
+        run: |
           if [ -z "${{ secrets.VSCE_PAT }}" ]; then
-            echo "::notice::VSCE_PAT not configured; skipping publish."
+            echo "::notice::VSCE_PAT not configured; skipping VS Code Marketplace publish."
             exit 0
           fi
-          echo "publish-vsce pipeline lands in M8."
+          echo "::notice::VSCE_PAT present; full publish pipeline lands in M4/M6."
