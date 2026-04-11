@@ -14,7 +14,7 @@ build:
     pnpm -r build
 
 test:
-    pnpm -r test
+    pnpm test
 
 lint:
     pnpm lint
@@ -26,4 +26,13 @@ format-check:
     pnpm format:check
 
 typecheck:
-    pnpm -r typecheck
+    pnpm typecheck
+
+# ─── CI mirror ────────────────────────────────────────────────────────────
+verify-pkg-shape:
+    pnpm exec tsx scripts/verify-pkg-shape.ts
+
+verify-ci-parity:
+    pnpm exec tsx scripts/verify-ci-parity.ts
+
+ci: lint format-check typecheck test verify-pkg-shape verify-ci-parity
