@@ -11,8 +11,9 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "pnpm -r test",
-    "typecheck": "pnpm -r typecheck"
+    "test": "vitest run",
+    "typecheck": "pnpm -r typecheck",
+    "build": "pnpm -r build"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

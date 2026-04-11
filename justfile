@@ -11,7 +11,7 @@ clean:
 
 # ─── build / test / lint ──────────────────────────────────────────────────
 build:
-    pnpm -r build
+    pnpm build
 
 test:
     pnpm test
@@ -35,4 +35,4 @@ verify-pkg-shape:
 verify-ci-parity:
     pnpm exec tsx scripts/verify-ci-parity.ts
 
-ci: lint format-check typecheck test verify-pkg-shape verify-ci-parity
+ci: lint format-check typecheck build test verify-pkg-shape verify-ci-parity
