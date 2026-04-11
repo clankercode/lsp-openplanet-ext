@@ -91,3 +91,52 @@ describe('resolveBinary — vscode-bundle source', () => {
     }
   });
 });
+
+describe('resolveBinary — npm-platform-pkg source', () => {
+  let tmp: string;
+
+  beforeEach(() => {
+    tmp = mkdtempSync(join(tmpdir(), 'resolve-npm-'));
+  });
+
+  afterEach(() => {
+    rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('resolves to the binary inside a fake platform package', async () => {
+    const { mkdirSync } = await import('node:fs');
+    // Simulate a platform package at <tmp>/@openplanet-lsp/<platform-arch>/
+    const { getPlatformArch, getBinaryName } = await import('../src/paths.js');
+    const pkgDir = join(tmp, '@openplanet-lsp', getPlatformArch());
+    mkdirSync(join(pkgDir, 'bin'), { recursive: true });
+    writeFileSync(
+      join(pkgDir, 'package.json'),
+      JSON.stringify({ name: `@openplanet-lsp/${getPlatformArch()}` }),
+    );
+    const bin = join(pkgDir, 'bin', getBinaryName());
+    writeFileSync(bin, '');
+    chmodSync(bin, 0o755);
+
+    // resolveFromPlatformPackage accepts a resolver shim in tests
+    const result = await resolveBinary({
+      _platformPackageResolver: () => join(pkgDir, 'package.json'),
+    } as never);
+    expect(result.path).toBe(bin);
+    expect(result.source).toBe('npm-platform-pkg');
+  });
+
+  it('records a miss when the platform package is absent', async () => {
+    try {
+      await resolveBinary({
+        _platformPackageResolver: () => {
+          throw new Error('MODULE_NOT_FOUND');
+        },
+      } as never);
+      throw new Error('should have thrown');
+    } catch (err) {
+      expect(err).toBeInstanceOf(BinaryNotFoundError);
+      const e = err as BinaryNotFoundError;
+      expect(e.checkedLocations.some((l) => l.source === 'npm-platform-pkg')).toBe(true);
+    }
+  });
+});
