@@ -52,3 +52,42 @@ describe('resolveBinary — override source', () => {
     expect(logs.join('\n')).toContain('override');
   });
 });
+
+describe('resolveBinary — vscode-bundle source', () => {
+  let tmp: string;
+
+  beforeEach(() => {
+    tmp = mkdtempSync(join(tmpdir(), 'resolve-vscode-'));
+  });
+
+  afterEach(() => {
+    rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('resolves to <extensionPath>/bin/openplanet-lsp when present', async () => {
+    const { mkdirSync } = await import('node:fs');
+    mkdirSync(join(tmp, 'bin'));
+    const binName = process.platform === 'win32' ? 'openplanet-lsp.exe' : 'openplanet-lsp';
+    const bin = join(tmp, 'bin', binName);
+    writeFileSync(bin, '');
+    chmodSync(bin, 0o755);
+    const result = await resolveBinary({ extensionPath: tmp });
+    expect(result.path).toBe(bin);
+    expect(result.source).toBe('vscode-bundle');
+  });
+
+  it('falls through to later sources (or throws) when the vscode bin is missing', async () => {
+    // No bin/ directory exists.
+    await expect(resolveBinary({ extensionPath: tmp })).rejects.toThrow(BinaryNotFoundError);
+  });
+
+  it('records the vscode-bundle miss in checkedLocations', async () => {
+    try {
+      await resolveBinary({ extensionPath: tmp });
+      throw new Error('should have thrown');
+    } catch (err) {
+      const e = err as BinaryNotFoundError;
+      expect(e.checkedLocations.some((l) => l.source === 'vscode-bundle')).toBe(true);
+    }
+  });
+});
