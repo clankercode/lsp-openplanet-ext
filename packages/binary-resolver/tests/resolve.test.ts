@@ -140,3 +140,76 @@ describe('resolveBinary — npm-platform-pkg source', () => {
     }
   });
 });
+
+describe('resolveBinary — PATH fallback', () => {
+  let tmp: string;
+  let originalPath: string | undefined;
+  let originalAllowPath: string | undefined;
+
+  beforeEach(() => {
+    tmp = mkdtempSync(join(tmpdir(), 'resolve-path-'));
+    originalPath = process.env.PATH;
+    originalAllowPath = process.env.OPENPLANET_LSP_ALLOW_PATH;
+  });
+
+  afterEach(() => {
+    rmSync(tmp, { recursive: true, force: true });
+    process.env.PATH = originalPath;
+    if (originalAllowPath === undefined) delete process.env.OPENPLANET_LSP_ALLOW_PATH;
+    else process.env.OPENPLANET_LSP_ALLOW_PATH = originalAllowPath;
+  });
+
+  it('does NOT search PATH when OPENPLANET_LSP_ALLOW_PATH is unset', async () => {
+    delete process.env.OPENPLANET_LSP_ALLOW_PATH;
+    // Plant a fake binary in tmp and put tmp on PATH.
+    const { getBinaryName } = await import('../src/paths.js');
+    const bin = join(tmp, getBinaryName());
+    writeFileSync(bin, '');
+    chmodSync(bin, 0o755);
+    process.env.PATH = tmp;
+    // With no override/extensionPath/platform pkg, the resolver should throw — not find this.
+    await expect(
+      resolveBinary({
+        _platformPackageResolver: () => {
+          throw new Error('MODULE_NOT_FOUND');
+        },
+      } as never),
+    ).rejects.toThrow(BinaryNotFoundError);
+  });
+
+  it('searches PATH when OPENPLANET_LSP_ALLOW_PATH=1', async () => {
+    process.env.OPENPLANET_LSP_ALLOW_PATH = '1';
+    const { getBinaryName } = await import('../src/paths.js');
+    const bin = join(tmp, getBinaryName());
+    writeFileSync(bin, '');
+    chmodSync(bin, 0o755);
+    process.env.PATH = tmp;
+    const result = await resolveBinary({
+      _platformPackageResolver: () => {
+        throw new Error('MODULE_NOT_FOUND');
+      },
+    } as never);
+    expect(result.path).toBe(bin);
+    expect(result.source).toBe('path');
+  });
+
+  it('lists every checked source in the BinaryNotFoundError when everything fails', async () => {
+    delete process.env.OPENPLANET_LSP_ALLOW_PATH;
+    try {
+      await resolveBinary({
+        extensionPath: tmp,
+        _platformPackageResolver: () => {
+          throw new Error('MODULE_NOT_FOUND');
+        },
+      } as never);
+      throw new Error('should have thrown');
+    } catch (err) {
+      const e = err as BinaryNotFoundError;
+      const sources = e.checkedLocations.map((l) => l.source);
+      expect(sources).toContain('vscode-bundle');
+      expect(sources).toContain('npm-platform-pkg');
+      // PATH not in the list because it's disabled by default.
+      expect(sources).not.toContain('path');
+    }
+  });
+});

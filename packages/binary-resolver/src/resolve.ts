@@ -1,6 +1,6 @@
 // src/resolve.ts
 import { existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, delimiter } from 'node:path';
 import { createRequire } from 'node:module';
 import type { ResolveOptions, ResolveResult } from './types.js';
 import { BinaryNotFoundError, type CheckedLocation } from './errors.js';
@@ -87,7 +87,26 @@ export async function resolveBinary(
     });
   }
 
-  // Later branches added in the next task.
+  // 4. PATH fallback — opt-in only
+  if (process.env.OPENPLANET_LSP_ALLOW_PATH === '1') {
+    const binName = getBinaryName();
+    const entries = (process.env.PATH ?? '').split(delimiter).filter(Boolean);
+    log(`trying path: searching ${entries.length} PATH entries for ${binName}`);
+    for (const dir of entries) {
+      const candidate = join(dir, binName);
+      if (existsSync(candidate)) {
+        log(`resolved via path: ${candidate}`);
+        return { path: candidate, source: 'path' };
+      }
+    }
+    checked.push({
+      source: 'path',
+      path: binName,
+      reason: `not found in any of ${entries.length} PATH entries`,
+    });
+  }
+
+  // All branches exhausted.
   throw new BinaryNotFoundError({ checkedLocations: checked });
 }
 
