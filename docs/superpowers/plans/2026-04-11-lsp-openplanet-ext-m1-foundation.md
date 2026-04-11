@@ -1033,12 +1033,14 @@ git commit -m "Add parseVersion with tolerant whitespace/v-prefix handling"
 ```js
 #!/usr/bin/env node
 // Mimics `openplanet-lsp --version`.
-if (process.argv.includes('--version') || process.argv.includes('-V')) {
-  process.stdout.write('openplanet-lsp 0.2.0\n');
-  process.exit(0);
-}
+// Prints unconditionally because tests invoke this via `node <path>` without
+// forwarding additional flags; the script's sole purpose is to produce mock
+// version output.
+process.stdout.write('openplanet-lsp 0.2.0\n');
 process.exit(0);
 ```
+
+*(Plan note: amended during execution — the original fixture gated output on `--version` but the tests call `checkBinaryVersion(process.execPath, '0.2.0', [fixtureOk])` which passes only the fixture path as argv, so the gate was never true and the fixture produced no output. Simpler to drop the gate than to modify every test to forward `--version` through `extraArgs`.)*
 
 `tests/fixtures/fake-binary-bad.mjs`:
 ```js
