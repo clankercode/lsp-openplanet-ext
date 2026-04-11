@@ -36,3 +36,6 @@ Thumbs.db
 # Platform package binaries (populated by CI at release time)
 packages/npm-lsp-platforms/*/bin/
 packages/vscode-ext/bin/
+
+# Superpowers goal-loops runtime state (transient planning artifacts)
+.goal-loops/
