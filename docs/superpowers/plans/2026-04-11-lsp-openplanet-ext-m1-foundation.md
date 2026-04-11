@@ -754,11 +754,73 @@ git commit -m "Add binary-resolver paths module (getPlatformArch, getBinaryName)
 
 ---
 
-## Task 8: `errors.ts` — `BinaryNotFoundError`
+## Task 8: `types.ts` — public type exports
+
+**Files:**
+- Create: `packages/binary-resolver/src/types.ts`
+
+Types don't need their own vitest coverage — they're verified by the TypeScript compiler when downstream modules use them. This task must land before Task 9 (`errors.ts`) because `errors.ts` imports `ResolveSource` from `types.ts`. Each commit should be buildable.
+
+*(Plan note: swapped with original Task 9 order during execution — amendment committed separately — so each commit leaves the workspace in a buildable state.)*
+
+- [ ] **Step 1: Create `src/types.ts`**
+
+```ts
+export type ResolveSource =
+  | 'override'
+  | 'vscode-bundle'
+  | 'npm-platform-pkg'
+  | 'path';
+
+export interface ResolveOptions {
+  /** Explicit override; wins over everything if provided and the file exists. */
+  override?: string;
+
+  /**
+   * For VSCode: path to the extension's install dir, containing bin/openplanet-lsp[.exe].
+   * For npm: not used.
+   */
+  extensionPath?: string;
+
+  /** Optional logger so callers can see why a particular path was chosen. */
+  log?: (msg: string) => void;
+}
+
+export interface ResolveResult {
+  /** Absolute path to the binary; verified to exist. */
+  path: string;
+  /** Which branch of the resolver produced this path. */
+  source: ResolveSource;
+  /** Result of parsing `<bin> --version`, if resolvable. Optional (not all callers need it). */
+  version?: string;
+}
+```
+
+- [ ] **Step 2: Run typecheck + tests**
+
+Run:
+```bash
+pnpm -F binary-resolver typecheck
+pnpm -F binary-resolver test
+```
+Expected: typecheck passes, `paths.test.ts` passes (the only test so far).
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add packages/binary-resolver/src/types.ts
+git commit -m "Add binary-resolver public type exports"
+```
+
+---
+
+## Task 9: `errors.ts` — `BinaryNotFoundError`
 
 **Files:**
 - Create: `packages/binary-resolver/src/errors.ts`
 - Create: `packages/binary-resolver/tests/errors.test.ts`
+
+*(Plan note: originally numbered Task 8 before the types/errors swap amendment. Now depends on Task 8 — `types.ts` — being committed first so `import type { ResolveSource } from './types.js'` resolves cleanly at commit time.)*
 
 - [ ] **Step 1: Write the failing test**
 
@@ -811,7 +873,7 @@ Run:
 ```bash
 pnpm -F binary-resolver test
 ```
-Expected: FAIL with module not found.
+Expected: FAIL — `errors.ts` does not exist yet.
 
 - [ ] **Step 3: Implement `src/errors.ts`**
 
@@ -852,77 +914,20 @@ function buildMessage(locations: readonly CheckedLocation[]): string {
 }
 ```
 
-This file imports `ResolveSource` from `./types.js` — that module is created in Task 9. The compiler errors until types.ts exists. That's fine because Task 9 is next; we'll run tests after both land.
+- [ ] **Step 4: Run the test — expect pass**
 
-Alternative: declare a local `type ResolveSource = string` in this file now and replace it in Task 9. Not worth the churn — just let the next task close the loop.
-
-- [ ] **Step 4: Skip running tests until Task 9 completes**
-
-The compilation gap is closed by the very next task. Do not run tests between Task 8 and Task 9.
+Run:
+```bash
+pnpm -F binary-resolver test
+pnpm -F binary-resolver typecheck
+```
+Expected: all tests pass (paths.test.ts + errors.test.ts), typecheck clean.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add packages/binary-resolver/src/errors.ts packages/binary-resolver/tests/errors.test.ts
 git commit -m "Add BinaryNotFoundError with structured checkedLocations"
-```
-
----
-
-## Task 9: `types.ts` — public type exports
-
-**Files:**
-- Create: `packages/binary-resolver/src/types.ts`
-
-Types don't need their own vitest coverage — they're verified by the TypeScript compiler when downstream modules use them. This task unblocks the compile of `errors.ts` from Task 8.
-
-- [ ] **Step 1: Create `src/types.ts`**
-
-```ts
-export type ResolveSource =
-  | 'override'
-  | 'vscode-bundle'
-  | 'npm-platform-pkg'
-  | 'path';
-
-export interface ResolveOptions {
-  /** Explicit override; wins over everything if provided and the file exists. */
-  override?: string;
-
-  /**
-   * For VSCode: path to the extension's install dir, containing bin/openplanet-lsp[.exe].
-   * For npm: not used.
-   */
-  extensionPath?: string;
-
-  /** Optional logger so callers can see why a particular path was chosen. */
-  log?: (msg: string) => void;
-}
-
-export interface ResolveResult {
-  /** Absolute path to the binary; verified to exist. */
-  path: string;
-  /** Which branch of the resolver produced this path. */
-  source: ResolveSource;
-  /** Result of parsing `<bin> --version`, if resolvable. Optional (not all callers need it). */
-  version?: string;
-}
-```
-
-- [ ] **Step 2: Run typecheck + tests**
-
-Run:
-```bash
-pnpm -F binary-resolver typecheck
-pnpm -F binary-resolver test
-```
-Expected: typecheck passes, `errors.test.ts` + `paths.test.ts` pass.
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add packages/binary-resolver/src/types.ts
-git commit -m "Add binary-resolver public type exports"
 ```
 
 ---
