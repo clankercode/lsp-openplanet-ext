@@ -1,0 +1,20 @@
+name: Publish Open VSX
+
+on:
+  workflow_call:
+    secrets:
+      OVSX_PAT:
+        required: true
+
+jobs:
+  gate:
+    name: Publish Gate
+    runs-on: ubuntu-latest
+    environment: ovsx
+    steps:
+      - run: |
+          if [ -z "${{ secrets.OVSX_PAT }}" ]; then
+            echo "::notice::OVSX_PAT not configured; skipping publish."
+            exit 0
+          fi
+          echo "publish-ovsx pipeline lands in M8."

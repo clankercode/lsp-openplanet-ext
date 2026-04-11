@@ -1,0 +1,20 @@
+name: Build Binaries
+
+# Reusable workflow: called by integration.yml and release.yml once those
+# actually need to build the Rust binary. Not yet wired up.
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: 'openplanet-lsp git ref to build'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  placeholder:
+    name: Placeholder
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Binary build pipeline lands in M2/M3."
+      - run: echo "Will read BINARY_REF, clone openplanet-lsp, cargo build --release --target X."
