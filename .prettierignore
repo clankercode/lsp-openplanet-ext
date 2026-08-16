@@ -5,3 +5,8 @@ pnpm-lock.yaml
 coverage
 docs/
 .goal-loops/
+
+# Generated grammar artifacts (packages/grammar/build.ts emits JSON.stringify
+# formatting; re-run the build rather than editing or hand-formatting these).
+packages/grammar/syntaxes/
+packages/vscode-ext/syntaxes/

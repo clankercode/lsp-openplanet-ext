@@ -12,7 +12,19 @@
       "include": "#comment-block"
     },
     {
+      "include": "#preprocessor"
+    },
+    {
+      "include": "#meta-attribute"
+    },
+    {
+      "include": "#string-triple"
+    },
+    {
       "include": "#string"
+    },
+    {
+      "include": "#string-single"
     },
     {
       "include": "#keyword-type"
@@ -21,7 +33,10 @@
       "include": "#keyword-control"
     },
     {
-      "include": "#keyword-other"
+      "include": "#keyword-declaration"
+    },
+    {
+      "include": "#keyword-modifier"
     },
     {
       "include": "#constant-language"
@@ -30,13 +45,28 @@
       "include": "#constant-numeric"
     },
     {
+      "include": "#operator-word"
+    },
+    {
+      "include": "#namespace-separator"
+    },
+    {
       "include": "#operator"
+    },
+    {
+      "include": "#handle"
     }
   ],
   "repository": {
     "comment-line": {
       "name": "comment.line.double-slash.angelscript",
-      "match": "//.*$"
+      "begin": "//",
+      "end": "$",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.comment.angelscript"
+        }
+      }
     },
     "comment-block": {
       "name": "comment.block.angelscript",
@@ -50,6 +80,112 @@
       "endCaptures": {
         "0": {
           "name": "punctuation.definition.comment.end.angelscript"
+        }
+      }
+    },
+    "preprocessor": {
+      "patterns": [
+        {
+          "include": "#preproc-include"
+        },
+        {
+          "include": "#preproc-directive"
+        }
+      ]
+    },
+    "preproc-include": {
+      "name": "meta.preprocessor.include.angelscript",
+      "begin": "^\\s*(#\\s*include)\\b",
+      "end": "(?=$)",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.control.directive.include.angelscript"
+        }
+      },
+      "patterns": [
+        {
+          "name": "string.quoted.double.include.angelscript",
+          "match": "\"[^\"]*\"",
+          "captures": {
+            "0": {
+              "name": "string.quoted.double.angelscript"
+            }
+          }
+        },
+        {
+          "name": "string.quoted.other.lt-gt.include.angelscript",
+          "match": "<[^>]*>"
+        },
+        {
+          "name": "keyword.other.import.as.angelscript",
+          "match": "\\bas\\b"
+        }
+      ]
+    },
+    "preproc-directive": {
+      "name": "meta.preprocessor.angelscript",
+      "begin": "^\\s*(#\\s*(?:define|undef|if|elif|else|endif|ifdef|ifndef|pragma|line|error))\\b",
+      "end": "(?=$)",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.control.directive.angelscript"
+        }
+      },
+      "patterns": [
+        {
+          "name": "entity.name.function.preprocessor.angelscript",
+          "match": "\\b[A-Za-z_][A-Za-z0-9_]*\\b"
+        },
+        {
+          "name": "constant.numeric.preprocessor.angelscript",
+          "match": "\\b\\d+\\b"
+        },
+        {
+          "name": "keyword.operator.logical.angelscript",
+          "match": "&&|\\|\\||!"
+        }
+      ]
+    },
+    "meta-attribute": {
+      "name": "meta.attribute.angelscript",
+      "begin": "(?<!\\w)\\[\\s*(Setting|SettingHidden|SettingsTab|Library|Hidden|Reserved|DoNotPublish|Deprecated|ScriptedDefault|GlobalDefault)\\b",
+      "end": "\\]",
+      "beginCaptures": {
+        "1": {
+          "name": "entity.name.attribute.angelscript"
+        }
+      },
+      "patterns": [
+        {
+          "name": "string.quoted.double.angelscript",
+          "match": "\"[^\"]*\""
+        },
+        {
+          "name": "variable.parameter.attribute.angelscript",
+          "match": "\\b[A-Za-z_][A-Za-z0-9_]*(?==)"
+        },
+        {
+          "name": "punctuation.separator.key-value.angelscript",
+          "match": "="
+        },
+        {
+          "name": "constant.language.angelscript",
+          "match": "\\b(?:true|false)\\b"
+        }
+      ]
+    },
+    "string-triple": {
+      "name": "string.quoted.triple.angelscript",
+      "begin": "\"\"\"",
+      "end": "\"\"\"",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.begin.angelscript"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.end.angelscript"
         }
       }
     },
@@ -74,17 +210,42 @@
         }
       ]
     },
+    "string-single": {
+      "name": "string.quoted.single.angelscript",
+      "begin": "'",
+      "end": "'",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.begin.angelscript"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.end.angelscript"
+        }
+      },
+      "patterns": [
+        {
+          "name": "constant.character.escape.angelscript",
+          "match": "\\\\."
+        }
+      ]
+    },
     "keyword-type": {
       "name": "storage.type.angelscript",
-      "match": "\\b(void|bool|int|int8|int16|int32|int64|uint|uint8|uint16|uint32|uint64|float|double|string|array|dictionary|ref|auto)\\b"
+      "match": "\\b(void|bool|int|int8|int16|int32|int64|uint|uint8|uint16|uint32|uint64|float|double|string|array|dictionary|ref|auto|function)\\b"
     },
     "keyword-control": {
       "name": "keyword.control.angelscript",
-      "match": "\\b(if|else|while|for|do|return|break|continue|switch|case|default|try|catch|throw)\\b"
+      "match": "\\b(if|else|while|for|do|return|break|continue|switch|case|default|try|catch|throw|foreach)\\b"
     },
-    "keyword-other": {
+    "keyword-declaration": {
       "name": "keyword.other.angelscript",
-      "match": "\\b(class|interface|enum|namespace|import|from|funcdef|mixin|shared|external|abstract|final|override|explicit|property|const|in|out|inout|this|super|cast)\\b"
+      "match": "\\b(class|interface|enum|namespace|import|from|funcdef|mixin|cast|this|super)\\b"
+    },
+    "keyword-modifier": {
+      "name": "storage.modifier.angelscript",
+      "match": "\\b(shared|external|abstract|final|override|explicit|property|const|private|protected|get|set|in|out|inout)\\b"
     },
     "constant-language": {
       "name": "constant.language.angelscript",
@@ -92,11 +253,23 @@
     },
     "constant-numeric": {
       "name": "constant.numeric.angelscript",
-      "match": "\\b([0-9]+(\\.[0-9]*)?(f|lf)?|0x[0-9a-fA-F]+)\\b"
+      "match": "(?x) \\b(?:\n  0[xX][0-9a-fA-F_]+\n  | 0[bB][01_]+\n  | 0[oO][0-7_]+\n  | [0-9][0-9_]*\\.[fF](?![A-Za-z0-9_])\n  | [0-9][0-9_]*\\.(?![A-Za-z0-9_])\n  | [0-9][0-9_]*\\.[eE][+-]?[0-9]+[fF]?\n  | (?:[0-9][0-9_]*)?\\.[0-9][0-9_]*(?:[eE][+-]?[0-9]+)?[fF]?\n  | [0-9][0-9_]*(?:\\.[0-9][0-9_]*)?(?:[eE][+-]?[0-9]+)[fF]?\n  | [0-9][0-9_]*[fF](?![A-Za-z0-9_])\n  | [0-9][0-9_]*\\b\n)"
+    },
+    "operator-word": {
+      "name": "keyword.operator.logical.word.angelscript",
+      "match": "\\b(and|or|not|xor|is)\\b"
     },
     "operator": {
       "name": "keyword.operator.angelscript",
       "match": "(\\+\\+|--|<<|>>|<=|>=|==|!=|&&|\\|\\||[+\\-*/%&|^~!<>=?:])"
+    },
+    "namespace-separator": {
+      "name": "punctuation.separator.namespace.angelscript",
+      "match": "::"
+    },
+    "handle": {
+      "name": "keyword.operator.handle.angelscript",
+      "match": "@@?"
     }
   }
 }
