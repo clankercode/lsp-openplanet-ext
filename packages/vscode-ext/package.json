@@ -2,7 +2,7 @@
   "name": "openplanet-lsp-vscode",
   "displayName": "OpenPlanet LSP",
   "description": "Language support for OpenPlanet AngelScript plugins (openplanet-lsp wrapper)",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "publisher": "clankercode",
   "license": "Unlicense",

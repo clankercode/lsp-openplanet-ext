@@ -7,6 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-17
+
+First release with a live CI pipeline, a modernized grammar, and a hardened
+extension — wraps `openplanet-lsp` **v0.5.0** (was v0.2.0).
+
+### Added
+
+- `RELEASE.md`: agent/human release playbook (tag-driven releases, changelog
+  requirement, post-CI checklist).
+- Extension settings: `openplanetLsp.serverPath`, `openplanetLsp.gameTarget`
+  (TMNEXT/MP4/MP40/MP41/TURBO/MP3/UNITED_FOREVER/UNITED/NATIONS_FOREVER —
+  flips preprocessor defines so dead `#if` branches match the real game),
+  `openplanetLsp.openplanetDir`, `openplanetLsp.pluginsDir`. Set values are
+  forwarded to the server as `initializationOptions`; unset ones are omitted
+  so a repo-local `.openplanet-lsp.toml` keeps precedence.
+- `openplanetLsp.restart` command; debounced automatic restart on settings
+  change (the server reads config at initialize only).
+- Output channel (`OpenPlanet LSP`), status bar item, and spawn-failure
+  surfacing with an "Open Settings" action — the language server failing to
+  start is no longer silent.
+- `info.toml` added to the document selector so the server's plugin-manifest
+  diagnostics surface in VS Code.
+- Extension README (marketplace listing: features, zero-setup expectation,
+  settings table).
+- Grammar: preprocessor directives (`#include`, `#if/#elif/#else/#endif`,
+  `#define`…), meta attributes (`[Setting …]`, `[SettingsTab …]`, …),
+  triple-quoted `"""…"""` strings, single-quoted strings, binary/octal/hex
+  numerics with `_` separators, float suffixes (`f`/`F`, `25.`, `25.f`),
+  exponents, `::` namespace separator, `@` handles, word operators
+  (`and`/`or`/`not`/`xor`/`is`).
+- Grammar test suite: real-Oniguruma scope assertions over a representative
+  corpus (14 tests).
+- CI: release builds now smoke-check VSIX contents (`dist/extension.js`,
+  grammar JSON present).
+
+### Fixed
+
+- CI never ran: push/PR triggers targeted `main` but the default branch is
+  `master` (`ci.yml`, `codeql.yml`, `integration.yml`).
+- Release binaries were non-executable after extraction (upload-artifact
+  delivers mode 644; binaries are now `chmod +x` before archiving).
+- binary-resolver looked up scoped `@openplanet-lsp/*` npm packages; the
+  server publishes unscoped `openplanet-lsp-<platform>` (v0.5.0 verified on
+  the registry).
+- Extension PATH fallback was dead code (`asAbsolutePath()` never returns
+  falsy); resolution now checks existence and falls back to a bare PATH
+  spawn, wiring the `binary-resolver` package with structured
+  `BinaryNotFoundError` diagnostics.
+- Language config: `<>` bracket pair (poisoned bracket matching on `a < b`
+  comparisons) removed; single-quote pairs with `string`/`comment` guards
+  added; `//` comment continuation on Enter.
+- Grammar false keywords removed: `throw`/`from`/`ref`/`explicit`/
+  `external`/`foreach` are not AngelScript keywords (the server lexer treats
+  them as identifiers; `from` is deliberately contextual).
+- actionlint/shellcheck findings in workflows (secret interpolation,
+  SC2129/SC2012/SC2035 patterns, constant `if: false`).
+
+### Changed
+
+- `BINARY_REF` v0.2.0 → **v0.5.0**: release binaries are built from
+  `openplanet-lsp` v0.5.0 (142 server commits of diagnostics/type-db work
+  since the previously pinned version).
+- Nightly workflow cron disabled (was burning a skipped run daily);
+  dispatch-only until M8.
+- `build-binaries.yml` now requests least-privilege `contents: read`.
+
+### Distribution
+
+- GitHub Release `v0.3.0`: six platform binary archives, the VSIX, and
+  SHA256SUMS. npm/Marketplace/OVSX publish fan-outs remain secrets-gated
+  stubs (not yet configured).
+
 ## [0.2.0] - 2026-04-12
 
 ### Added
