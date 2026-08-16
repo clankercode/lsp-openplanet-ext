@@ -1,7 +1,11 @@
 .vscode/**
 src/**
+tests/**
 node_modules/**
 *.vsix
+*.tsbuildinfo
+.DS_Store
 esbuild.mjs
 tsconfig.json
 .eslintrc*
+vitest.config.ts

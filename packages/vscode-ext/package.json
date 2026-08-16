@@ -25,6 +25,13 @@
     "url": "https://github.com/clankercode/lsp-openplanet-ext"
   },
   "main": "./dist/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "The language server analyzes workspace files and openplanetLsp.serverPath executes a configured binary. File contents are sent to the server process."
+    }
+  },
+  "activationEvents": [],
   "contributes": {
     "languages": [
       {
@@ -46,20 +53,62 @@
         "path": "./syntaxes/angelscript.tmLanguage.json"
       }
     ],
+    "commands": [
+      {
+        "command": "openplanetLsp.restart",
+        "title": "Restart Server",
+        "category": "OpenPlanet LSP"
+      }
+    ],
     "configuration": {
       "title": "OpenPlanet LSP",
       "properties": {
         "openplanetLsp.serverPath": {
           "type": "string",
           "default": "",
-          "description": "Override path to the openplanet-lsp binary. Leave empty to use the bundled or PATH-resolved binary."
+          "description": "Absolute path to the openplanet-lsp binary. Leave empty to use the bundled binary (when available) or the first `openplanet-lsp` on PATH."
+        },
+        "openplanetLsp.openplanetDir": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Path to the OpenPlanet installation directory (auto-detected when empty). When set, forwarded to the server as `openplanet_dir` — overrides `.openplanet-lsp.toml`."
+        },
+        "openplanetLsp.pluginsDir": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Path to the OpenPlanet plugins directory (auto-detected when empty). When set, forwarded to the server as `plugins_dir` — overrides `.openplanet-lsp.toml`."
+        },
+        "openplanetLsp.gameTarget": {
+          "type": "string",
+          "default": "TMNEXT",
+          "enum": [
+            "TMNEXT",
+            "MP4",
+            "MP40",
+            "MP41",
+            "TURBO",
+            "MP3",
+            "UNITED_FOREVER",
+            "UNITED",
+            "NATIONS_FOREVER"
+          ],
+          "markdownDescription": "Which game the LSP compiles `#if` platform branches for (preprocessor defines). `TMNEXT` = Trackmania (2020). Leave at default to let a workspace `.openplanet-lsp.toml` decide. Changing this restarts the server."
+        },
+        "openplanetLsp.defines": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Extra preprocessor defines (replaces the game-target defaults when non-empty). Forwarded to the server as `defines`."
         }
       }
     }
   },
   "scripts": {
     "build": "node esbuild.mjs",
-    "test": "echo 'Extension integration tests land in M4/M6' && exit 0",
+    "vscode:prepublish": "node esbuild.mjs",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "package": "vsce package --no-dependencies",
     "package:pre": "vsce package --pre-release --no-dependencies"
