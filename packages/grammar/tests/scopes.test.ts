@@ -64,6 +64,21 @@ async function tokenize() {
   return result;
 }
 
+/**
+ * Tokenize a single ad-hoc line with a fresh INITIAL stack. Used for
+ * negative tests where the corpus intentionally has no example.
+ */
+async function tokenizeLine(line: string): Promise<{ text: string; scopes: string[] }[]> {
+  const reg = await getRegistry();
+  const grammar = await reg.loadGrammar('source.angelscript');
+  if (!grammar) throw new Error('grammar failed to load');
+  const r = grammar.tokenizeLine(line, vsctm.INITIAL, 0);
+  return r.tokens.map((t) => ({
+    text: line.slice(t.startIndex, t.endIndex),
+    scopes: t.scopes,
+  }));
+}
+
 /** Find the first token whose text contains `needle` and return its scopes. */
 function scopeOf(
   tokens: { text: string; scopes: string[] }[][],
@@ -252,5 +267,24 @@ describe('AngelScript grammar scopes', () => {
   it('highlights @ handles', async () => {
     const tokens = await tokenize();
     expect(scopeOf(tokens, '@')?.some((s) => s.includes('keyword.operator.handle'))).toBe(true);
+  });
+
+  it('treats non-lexer words as plain identifiers, not keywords', async () => {
+    // The v0.5.0 lexer's keyword_lookup has no throw/from/ref/explicit/
+    // external/foreach — highlighting them as keywords mis-paints code the
+    // server accepts as identifiers (e.g. a local named `from`).
+    // Unstyled words carry only the base source.angelscript scope (the
+    // grammar has no identifier rule), so assert the absence of any
+    // keyword/storage scope on the token containing the word.
+    const cases = ['from', 'ref', 'explicit', 'external', 'foreach'];
+    for (const word of cases) {
+      const tokens = await tokenizeLine(`x = ${word};`);
+      const token = tokens.find((t) => t.text.includes(word));
+      expect(token, `${word} should be covered by a token`).toBeDefined();
+      expect(
+        token!.scopes.some((s) => s.startsWith('keyword') || s.startsWith('storage')),
+        `${word} must not highlight as keyword/storage (got ${token!.scopes.join(' ')})`,
+      ).toBe(false);
+    }
   });
 });

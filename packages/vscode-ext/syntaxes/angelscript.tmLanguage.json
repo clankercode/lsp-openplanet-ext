@@ -233,19 +233,19 @@
     },
     "keyword-type": {
       "name": "storage.type.angelscript",
-      "match": "\\b(void|bool|int|int8|int16|int32|int64|uint|uint8|uint16|uint32|uint64|float|double|string|array|dictionary|ref|auto|function)\\b"
+      "match": "\\b(void|bool|int|int8|int16|int32|int64|uint|uint8|uint16|uint32|uint64|float|double|string|array|dictionary|auto|function)\\b"
     },
     "keyword-control": {
       "name": "keyword.control.angelscript",
-      "match": "\\b(if|else|while|for|do|return|break|continue|switch|case|default|try|catch|throw|foreach)\\b"
+      "match": "\\b(if|else|while|for|do|return|break|continue|switch|case|default|try|catch)\\b"
     },
     "keyword-declaration": {
       "name": "keyword.other.angelscript",
-      "match": "\\b(class|interface|enum|namespace|import|from|funcdef|mixin|cast|this|super)\\b"
+      "match": "\\b(class|interface|enum|namespace|import|funcdef|mixin|cast|this|super)\\b"
     },
     "keyword-modifier": {
       "name": "storage.modifier.angelscript",
-      "match": "\\b(shared|external|abstract|final|override|explicit|property|const|private|protected|get|set|in|out|inout)\\b"
+      "match": "\\b(shared|abstract|final|override|property|const|private|protected|get|set|in|out|inout)\\b"
     },
     "constant-language": {
       "name": "constant.language.angelscript",
