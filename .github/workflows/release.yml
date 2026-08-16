@@ -45,9 +45,11 @@ jobs:
           pnpm exec tsx scripts/validate-release-tag.ts "$tag"
           info=$(pnpm exec tsx scripts/validate-release-tag.ts "$tag" --json)
           echo "Parsed tag info: $info"
-          echo "version=$(echo "$info" | jq -r .version)" >> "$GITHUB_OUTPUT"
-          echo "base_version=$(echo "$info" | jq -r .baseVersion)" >> "$GITHUB_OUTPUT"
-          echo "is_dry=$(echo "$info" | jq -r .isDry)" >> "$GITHUB_OUTPUT"
+          {
+            echo "version=$(echo "$info" | jq -r .version)"
+            echo "base_version=$(echo "$info" | jq -r .baseVersion)"
+            echo "is_dry=$(echo "$info" | jq -r .isDry)"
+          } >> "$GITHUB_OUTPUT"
 
   build:
     name: Build Binaries
@@ -93,7 +95,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          vsix=$(ls -1 *.vsix | head -n1)
+          vsix=$(find . -maxdepth 1 -name '*.vsix' -print -quit)
+          [ -n "$vsix" ] || { echo "::error::no VSIX found to smoke-check"; exit 1; }
           echo "Checking $vsix"
           # `vsce package` succeeding ≠ a working extension; assert the
           # entries the runtime actually loads are inside the archive.
@@ -168,7 +171,7 @@ jobs:
           # Compute into a tempfile then move in, so the glob can never
           # include the partially-written output file.
           tmp=$(mktemp)
-          sha256sum *.tar.gz *.zip *.vsix > "$tmp"
+          sha256sum ./*.tar.gz ./*.zip ./*.vsix > "$tmp"
           mv "$tmp" SHA256SUMS
           cat SHA256SUMS
 

@@ -1,8 +1,9 @@
 name: Nightly
 
-# Disabled by default — enable in M8 by restoring `schedule:` and removing
-# `if: false`. The cron trigger stays commented out so it doesn't burn a
-# skipped run every day (61 runs observed before this change).
+# Disabled by default — enable in M8 by restoring `schedule:` below. The
+# cron trigger stays commented out so it doesn't burn a skipped run every
+# day (61 runs observed before this change). Dispatch-only in the meantime;
+# the stub job below is harmless to run manually.
 on:
   # schedule:
   #   - cron: '0 6 * * *'
@@ -12,7 +13,6 @@ jobs:
   nightly:
     name: Nightly Build
     runs-on: ubuntu-latest
-    if: false
     steps:
       - uses: actions/checkout@v4
       - run: echo "Nightly build against openplanet-lsp@main lands in M8."
