@@ -28,6 +28,11 @@ on:
         type: string
         default: ''
 
+# Least privilege: this workflow only checks out and uploads artifacts; it
+# must not inherit the caller's contents:write.
+permissions:
+  contents: read
+
 jobs:
   resolve-ref:
     name: Resolve BINARY_REF

@@ -18,8 +18,10 @@ jobs:
     steps:
       - name: Check OVSX_PAT
         shell: bash
+        env:
+          TOKEN: ${{ secrets.OVSX_PAT }}
         run: |
-          if [ -z "${{ secrets.OVSX_PAT }}" ]; then
+          if [ -z "$TOKEN" ]; then
             echo "::notice::OVSX_PAT not configured; skipping Open VSX publish."
             exit 0
           fi

@@ -18,8 +18,10 @@ jobs:
     steps:
       - name: Check NPM_TOKEN
         shell: bash
+        env:
+          TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          if [ -z "${{ secrets.NPM_TOKEN }}" ]; then
+          if [ -z "$TOKEN" ]; then
             echo "::notice::NPM_TOKEN not configured; skipping npm publish."
             exit 0
           fi

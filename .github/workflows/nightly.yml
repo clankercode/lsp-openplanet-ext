@@ -1,9 +1,11 @@
 name: Nightly
 
-# Disabled by default — enable in M8 by removing `if: false` and setting a schedule.
+# Disabled by default — enable in M8 by restoring `schedule:` and removing
+# `if: false`. The cron trigger stays commented out so it doesn't burn a
+# skipped run every day (61 runs observed before this change).
 on:
-  schedule:
-    - cron: '0 6 * * *'
+  # schedule:
+  #   - cron: '0 6 * * *'
   workflow_dispatch:
 
 jobs:

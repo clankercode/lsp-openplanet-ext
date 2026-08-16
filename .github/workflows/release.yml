@@ -88,6 +88,20 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - name: Smoke-check VSIX contents
+        working-directory: packages/vscode-ext
+        shell: bash
+        run: |
+          set -euo pipefail
+          vsix=$(ls -1 *.vsix | head -n1)
+          echo "Checking $vsix"
+          # `vsce package` succeeding ≠ a working extension; assert the
+          # entries the runtime actually loads are inside the archive.
+          unzip -l "$vsix" | grep -E 'dist/extension\.js' \
+            || { echo "::error::dist/extension.js missing from VSIX"; exit 1; }
+          unzip -l "$vsix" | grep -E 'syntaxes/angelscript\.tmLanguage\.json' \
+            || { echo "::error::grammar JSON missing from VSIX"; exit 1; }
+
   release:
     name: Create GitHub Release
     needs: [validate, build, build-vsix]
@@ -131,6 +145,9 @@ jobs:
                 ;;
               *)
                 archive="release-assets/openplanet-lsp-v${version}-${node_target}.tar.gz"
+                # upload-artifact delivers files mode 644; the binary must be
+                # executable after extraction (v0.2.0 shipped non-runnable).
+                chmod +x "$dir"/openplanet-lsp*
                 tar -C "$dir" -czf "$archive" .
                 ;;
             esac

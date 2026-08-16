@@ -70,4 +70,7 @@ extract-changelog VERSION:
 pre-release-check VERSION:
     just validate-release-tag v{{VERSION}}
     pnpm exec tsx scripts/extract-changelog.ts {{VERSION}}
+    # Fail early on a bad BINARY_REF pin instead of at release-build time.
+    git ls-remote --exit-code https://github.com/clankercode/lsp-openplanet "$(tr -d ' \n' <BINARY_REF)" >/dev/null \
+      || { echo "❌ BINARY_REF ($(tr -d ' \n' <BINARY_REF)) does not resolve upstream"; exit 1; }
     echo "✅ Pre-release checks passed for v{{VERSION}}"

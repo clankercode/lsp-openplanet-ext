@@ -18,8 +18,10 @@ jobs:
     steps:
       - name: Check VSCE_PAT
         shell: bash
+        env:
+          TOKEN: ${{ secrets.VSCE_PAT }}
         run: |
-          if [ -z "${{ secrets.VSCE_PAT }}" ]; then
+          if [ -z "$TOKEN" ]; then
             echo "::notice::VSCE_PAT not configured; skipping VS Code Marketplace publish."
             exit 0
           fi
