@@ -271,7 +271,10 @@ error message format (lists all checked locations), `OPENPLANET_LSP_ALLOW_PATH` 
 ## 4. `openplanet-lsp` npm Package
 
 **Package name:** `openplanet-lsp` (unscoped — friendly install UX)  
-**Scope for platform packages:** `@openplanet-lsp/<platform-arch>` (registered org)  
+**Scope for platform packages:** ~~`@openplanet-lsp/<platform-arch>` (registered org)~~
+**2026-08-17 errata:** the `@openplanet-lsp` org was never registered; the LSP
+repo publishes **unscoped** platform packages (`openplanet-lsp-linux-x64`, …).
+`binary-resolver` and any M2/M3 npm package must use the unscoped names.  
 **Binary:** `openplanet-lsp` (matches Rust binary name)  
 **Node:** `>=18`  
 **Runtime deps:** platform packages (optional) + `binary-resolver` (bundled via tsup, no

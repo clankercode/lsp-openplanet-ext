@@ -105,13 +105,15 @@ describe('resolveBinary — npm-platform-pkg source', () => {
 
   it('resolves to the binary inside a fake platform package', async () => {
     const { mkdirSync } = await import('node:fs');
-    // Simulate a platform package at <tmp>/@openplanet-lsp/<platform-arch>/
+    // Simulate a platform package at <tmp>/node_modules/openplanet-lsp-<platform-arch>/.
+    // The published packages are UNSCOPED (openplanet-lsp-linux-x64 etc.) —
+    // the @openplanet-lsp org assumed by the original design never existed.
     const { getPlatformArch, getBinaryName } = await import('../src/paths.js');
-    const pkgDir = join(tmp, '@openplanet-lsp', getPlatformArch());
+    const pkgDir = join(tmp, 'node_modules', `openplanet-lsp-${getPlatformArch()}`);
     mkdirSync(join(pkgDir, 'bin'), { recursive: true });
     writeFileSync(
       join(pkgDir, 'package.json'),
-      JSON.stringify({ name: `@openplanet-lsp/${getPlatformArch()}` }),
+      JSON.stringify({ name: `openplanet-lsp-${getPlatformArch()}` }),
     );
     const bin = join(pkgDir, 'bin', getBinaryName());
     writeFileSync(bin, '');
@@ -123,6 +125,24 @@ describe('resolveBinary — npm-platform-pkg source', () => {
     } as never);
     expect(result.path).toBe(bin);
     expect(result.source).toBe('npm-platform-pkg');
+  });
+
+  it('asks the module resolver for the unscoped platform package specifier', async () => {
+    // Regression guard: the resolver must request openplanet-lsp-<platform-arch>,
+    // NOT @openplanet-lsp/<platform-arch> — only the unscoped packages are
+    // published to npm (scoped name 404s).
+    const { getPlatformArch } = await import('../src/paths.js');
+    const specifiers: string[] = [];
+    await resolveBinary({
+      _platformPackageResolver: (specifier: string) => {
+        specifiers.push(specifier);
+        throw new Error('MODULE_NOT_FOUND');
+      },
+    } as never).catch(() => {
+      // expected to throw BinaryNotFoundError
+    });
+    expect(specifiers).toContain(`openplanet-lsp-${getPlatformArch()}/package.json`);
+    expect(specifiers.join('\n')).not.toContain('@openplanet-lsp/');
   });
 
   it('records a miss when the platform package is absent', async () => {

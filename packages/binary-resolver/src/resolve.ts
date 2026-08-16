@@ -54,10 +54,12 @@ export async function resolveBinary(
     });
   }
 
-  // 3. npm platform package
+  // 3. npm platform package — unscoped names (openplanet-lsp-linux-x64 etc.);
+  //    the @openplanet-lsp org assumed by the original design never existed,
+  //    so a scoped specifier 404s against the published packages.
   const platformArch = safeGetPlatformArch();
   if (platformArch) {
-    const specifier = `@openplanet-lsp/${platformArch}/package.json`;
+    const specifier = `openplanet-lsp-${platformArch}/package.json`;
     log(`trying npm-platform-pkg: ${specifier}`);
     try {
       const manifestPath = resolver(specifier);

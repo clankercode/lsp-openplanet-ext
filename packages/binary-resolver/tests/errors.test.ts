@@ -22,7 +22,7 @@ describe('BinaryNotFoundError', () => {
     const err = new BinaryNotFoundError({
       checkedLocations: [
         { source: 'override', path: '/bad/path', reason: 'file not found' },
-        { source: 'npm-platform-pkg', path: '@openplanet-lsp/linux-x64', reason: 'not installed' },
+        { source: 'npm-platform-pkg', path: 'openplanet-lsp-linux-x64', reason: 'not installed' },
       ],
     });
     expect(err.message).toContain('openplanet-lsp binary not found');
@@ -30,7 +30,7 @@ describe('BinaryNotFoundError', () => {
     expect(err.message).toContain('/bad/path');
     expect(err.message).toContain('file not found');
     expect(err.message).toContain('npm-platform-pkg');
-    expect(err.message).toContain('@openplanet-lsp/linux-x64');
+    expect(err.message).toContain('openplanet-lsp-linux-x64');
   });
 
   it('handles empty checkedLocations without crashing', () => {
