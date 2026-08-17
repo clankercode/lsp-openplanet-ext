@@ -59,6 +59,34 @@ build-vsix:
     pnpm --filter openplanet-lsp-vscode build
     pnpm --filter openplanet-lsp-vscode exec vsce package --no-dependencies --out ../../dist/openplanet-lsp-vscode.vsix
 
+# Best-effort reload of the focused Cursor window (no CLI reload exists;
+# reload only works when a Cursor window is focused — otherwise the
+# extension activates on next window open/restart).
+install-cursor: build-vsix
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! command -v cursor >/dev/null 2>&1; then
+        echo "cursor CLI not found on PATH" >&2
+        exit 1
+    fi
+    cursor --install-extension dist/openplanet-lsp-vscode.vsix
+    # Best-effort window reload: send Ctrl+Shift+P then the command id to
+    # the focused window. Requires xdotool (Wayland/X11) and focus.
+    if command -v xdotool >/dev/null 2>&1; then
+        if xdotool getactivewindow getwindowname 2>/dev/null | grep -qi cursor; then
+            xdotool key --clearmodifiers ctrl+shift+p
+            sleep 0.4
+            xdotool type --delay 50 "Developer: Reload Window"
+            sleep 0.6
+            xdotool key --clearmodifiers Return
+            echo "Reload keystrokes sent to focused Cursor window"
+        else
+            echo "No focused Cursor window - reload manually (Ctrl+Shift+P > Reload Window)"
+        fi
+    else
+        echo "xdotool not found - reload Cursor manually (Ctrl+Shift+P > Reload Window)"
+    fi
+
 # ─── release helpers ──────────────────────────────────────────────────────
 # Bump all workspace package.json files to a new version.
 bump VERSION:
