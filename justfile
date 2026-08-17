@@ -53,6 +53,12 @@ build-vsce:
     pnpm --filter openplanet-lsp-vscode build
     pnpm --filter openplanet-lsp-vscode package
 
+# Build the VSIX into dist/ at the repo root (gitignored).
+build-vsix:
+    mkdir -p dist
+    pnpm --filter openplanet-lsp-vscode build
+    pnpm --filter openplanet-lsp-vscode exec vsce package --no-dependencies --out ../../dist/openplanet-lsp-vscode.vsix
+
 # ─── release helpers ──────────────────────────────────────────────────────
 # Bump all workspace package.json files to a new version.
 bump VERSION:
