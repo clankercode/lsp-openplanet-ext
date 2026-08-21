@@ -103,12 +103,17 @@ async function startClient(context: vscode.ExtensionContext): Promise<void> {
       { scheme: 'file', pattern: '**/info.toml' },
     ],
     synchronize: {
-      // Forward-looking: the server has no didChangeWatchedFiles handler yet
-      // (verified — only didOpen/didChange/didClose), so these notifications
-      // are ignored today. Keep the watcher so the moment the server gains
-      // watched-file support, external .as edits start flowing without an
-      // extension update.
-      fileEvents: vscode.workspace.createFileSystemWatcher('**/*.as'),
+      // Forward-looking: vscode-languageclient only forwards these events once
+      // the server declares the watched-files capability. The server has no
+      // didChangeWatchedFiles handler today; one for **/info.toml (workspace
+      // add/remove/rebuild per the multi-root spec, t9) is landing separately.
+      // Keeping both watchers wired means external .as edits and plugin-root
+      // lifecycle events start flowing the moment the server gains support,
+      // without an extension update.
+      fileEvents: [
+        vscode.workspace.createFileSystemWatcher('**/*.as'),
+        vscode.workspace.createFileSystemWatcher('**/info.toml'),
+      ],
     },
     outputChannel,
     initializationOptions,
