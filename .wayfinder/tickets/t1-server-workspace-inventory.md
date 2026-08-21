@@ -107,6 +107,7 @@ Per-root feasibility: `load` is a pure fn of `(workspace_root, init_options)` �
 ### Risk notes — easy vs hard to shard
 
 **Easy (mechanical / already parameterized):**
+
 - `load_plugin_workspace` + `DependencySearch` + `deps.rs` — pure per-root functions; N calls, zero changes.
 - `AnalysisSnapshot` + `SymbolTable` — self-contained per load; N instances compose.
 - `LspConfig::load(Some(root), …)` — free function; per-root calls work now. Per-root `.openplanet-lsp.toml` + manifest defines fall out naturally.
@@ -116,6 +117,7 @@ Per-root feasibility: `load` is a pure fn of `(workspace_root, init_options)` �
 - CLI/watch/entrypoint — untouched (keep loader signature).
 
 **Hard (design work / wide blast radius):**
+
 - **URI→workspace routing**: nothing exists; must add root prefix-matching (canonicalized) plus a fallback for out-of-root/untitled docs, and thread it through ~16 feature handlers in `mod.rs` that today grab the one snapshot. Widest mechanical change; also the natural insertion point for everything else.
 - **`on_change` diagnostic fan-out** (`mod.rs:116-201`): rebuilds must become per-owning-workspace (else one keystroke rewalks N×deps), and the manifest-publish block (`:157-189`) must target the owning root's info.toml only. Stale-diagnostic clearing across workspace boundaries needs a rule.
 - **Config layering spec**: init options/user config are global; defines/manifest layering is per-root; `plugins_dir`, `source_paths`, `ignore_paths` can differ per plugin. Which fields remain server-global (typedb paths, `game_target`?) is a decision, and `Backend.config` must split into global + per-workspace parts (readers at `mod.rs:78,118,233,694`).
