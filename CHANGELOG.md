@@ -24,7 +24,7 @@ extension — wraps `openplanet-lsp` **v0.5.0** (was v0.2.0).
   so a repo-local `.openplanet-lsp.toml` keeps precedence.
 - `openplanetLsp.restart` command; debounced automatic restart on settings
   change (the server reads config at initialize only).
-- Output channel (`OpenPlanet LSP`), status bar item, and spawn-failure
+- Output channel (`Openplanet LSP`), status bar item, and spawn-failure
   surfacing with an "Open Settings" action — the language server failing to
   start is no longer silent.
 - `info.toml` added to the document selector so the server's plugin-manifest

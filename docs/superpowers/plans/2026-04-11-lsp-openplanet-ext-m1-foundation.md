@@ -2676,7 +2676,7 @@ git commit -m "Add stub workflows: integration, build-binaries, release, publish
 ```markdown
 # lsp-openplanet-ext
 
-VSCode extension and npm package that wrap [`openplanet-lsp`](https://github.com/clankercode/lsp-openplanet) — a language server for OpenPlanet AngelScript plugins — so you can use it from any editor or agentic CLI without needing a Rust toolchain.
+VSCode extension and npm package that wrap [`openplanet-lsp`](https://github.com/clankercode/lsp-openplanet) — a language server for Openplanet AngelScript plugins — so you can use it from any editor or agentic CLI without needing a Rust toolchain.
 
 ## Status
 

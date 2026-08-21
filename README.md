@@ -1,12 +1,12 @@
 # lsp-openplanet-ext
 
-A monorepo for wrapping [`openplanet-lsp`](https://github.com/clankercode/lsp-openplanet) — a language server for OpenPlanet AngelScript plugins — into a VSCode extension and npm packages so you can use it from any editor or agentic CLI without needing a Rust toolchain.
+A monorepo for wrapping [`openplanet-lsp`](https://github.com/clankercode/lsp-openplanet) — a language server for Openplanet AngelScript plugins — into a VSCode extension and npm packages so you can use it from any editor or agentic CLI without needing a Rust toolchain.
 
 ## Status
 
 **M1 (Foundation) — ✅ Complete**
 
-The monorepo skeleton, core tooling, and `binary-resolver` package are done. The CI/CD pipeline is fully wired with lint, typecheck, unit tests, and a complete release automation setup that cross-compiles the OpenPlanet LSP binary for six platforms (linux-x64, linux-arm64, darwin-x64, darwin-arm64, win32-x64, win32-arm64).
+The monorepo skeleton, core tooling, and `binary-resolver` package are done. The CI/CD pipeline is fully wired with lint, typecheck, unit tests, and a complete release automation setup that cross-compiles the Openplanet LSP binary for six platforms (linux-x64, linux-arm64, darwin-x64, darwin-arm64, win32-x64, win32-arm64).
 
 **Current milestone: M2** — Building the npm CLI wrapper.
 

@@ -1,6 +1,6 @@
-# OpenPlanet LSP for VS Code
+# Openplanet LSP for VS Code
 
-Language support for [OpenPlanet](https://openplanet.dev) AngelScript plugins, powered by
+Language support for [Openplanet](https://openplanet.dev) AngelScript plugins, powered by
 [openplanet-lsp](https://github.com/clankercode/lsp-openplanet): diagnostics, completions,
 hover, go-to-definition/references, rename, document/workspace symbols, signature help,
 formatting, inlay hints, folding, call hierarchy, and semantic tokens.
@@ -14,14 +14,14 @@ The extension needs the `openplanet-lsp` binary. It is resolved in this order:
 3. **`openplanet-lsp` on your PATH** — e.g. `npm install -g openplanet-lsp`.
 
 If none is found the extension shows an error with a shortcut to the settings; the log
-channel (_Output → OpenPlanet LSP_) shows exactly what was tried.
+channel (_Output → Openplanet LSP_) shows exactly what was tried.
 
 ## Settings
 
 | Setting                       | Default    | Description                                        |
 | ----------------------------- | ---------- | -------------------------------------------------- |
 | `openplanetLsp.serverPath`    | `""`       | Absolute path to the binary override.              |
-| `openplanetLsp.openplanetDir` | `""`       | OpenPlanet install dir (auto-detected when empty). |
+| `openplanetLsp.openplanetDir` | `""`       | Openplanet install dir (auto-detected when empty). |
 | `openplanetLsp.pluginsDir`    | `""`       | Plugins dir (auto-detected when empty).            |
 | `openplanetLsp.gameTarget`    | `"TMNEXT"` | Which game's `#if` platform branches are compiled. |
 | `openplanetLsp.defines`       | `[]`       | Extra preprocessor defines.                        |
@@ -38,7 +38,7 @@ read at initialize time).
 
 ## Commands
 
-- **OpenPlanet LSP: Restart Server** — restart the language server.
+- **Openplanet LSP: Restart Server** — restart the language server.
 
 ## Untrusted workspaces
 

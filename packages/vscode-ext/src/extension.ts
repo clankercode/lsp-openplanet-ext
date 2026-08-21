@@ -119,7 +119,7 @@ async function startClient(context: vscode.ExtensionContext): Promise<void> {
     initializationOptions,
   };
 
-  client = new LanguageClient('openplanet-lsp', 'OpenPlanet LSP', serverOptions, clientOptions);
+  client = new LanguageClient('openplanet-lsp', 'Openplanet LSP', serverOptions, clientOptions);
   context.subscriptions.push(client);
 
   try {
@@ -129,7 +129,7 @@ async function startClient(context: vscode.ExtensionContext): Promise<void> {
     outputChannel?.appendLine(`[error] failed to start server: ${detail}`);
     void vscode.window
       .showErrorMessage(
-        `OpenPlanet LSP failed to start: ${detail}. ` +
+        `Openplanet LSP failed to start: ${detail}. ` +
           'Is openplanet-lsp installed? (settings: openplanetLsp.serverPath)',
         'Open Settings',
         'Show Logs',
@@ -169,7 +169,7 @@ async function restartClient(context: vscode.ExtensionContext): Promise<void> {
 }
 
 export function activate(context: vscode.ExtensionContext): void {
-  outputChannel = vscode.window.createOutputChannel('OpenPlanet LSP');
+  outputChannel = vscode.window.createOutputChannel('Openplanet LSP');
   context.subscriptions.push(outputChannel);
 
   void startClient(context);

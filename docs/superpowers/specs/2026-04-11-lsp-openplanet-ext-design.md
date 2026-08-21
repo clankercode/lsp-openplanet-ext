@@ -28,7 +28,7 @@
 ### Goal
 
 Make `openplanet-lsp` (the Rust language server in `../lsp-openplanet`) usable by every editor
-and agentic CLI an OpenPlanet plugin developer might reach for, without requiring any of them to
+and agentic CLI an Openplanet plugin developer might reach for, without requiring any of them to
 have a Rust toolchain.
 
 ### In Scope (v1)
@@ -67,7 +67,7 @@ have a Rust toolchain.
 3. `npm install -g openplanet-lsp && openplanet-lsp --check` reports a healthy bundled binary on
    all six platforms.
 4. A documented nvim config snippet produces working diagnostics and completion against a real
-   OpenPlanet plugin.
+   Openplanet plugin.
 5. A documented Sublime LSP config snippet does the same.
 6. A documented opencode config and a documented claude-code config each successfully invoke the
    LSP.
@@ -332,7 +332,7 @@ propagation, integration tests against a packed tarball in a tmpdir.
 
 ## 5. `openplanet-lsp-vscode` Extension
 
-**Display name:** OpenPlanet AngelScript  
+**Display name:** Openplanet AngelScript  
 **Publisher:** `<publisher-id>` (existing account, OQ-1)  
 **Categories:** Programming Languages, Linters  
 **Activation events:** `onLanguage:angelscript`, `workspaceContains:**/info.toml`  
@@ -446,7 +446,7 @@ AngelScript features the grammar must cover (v1):
 - Function declarations (including `void`, `auto`, generic type params)
 - Attribute syntax (`[Setting category="..."]`, `[NoPrint]`, etc.)
 - Preprocessor directives (`#include`, `#if`, `#endif`, `#define`, `#ifdef`, etc.)
-- OpenPlanet coroutine primitives (`startnew`, `yield`)
+- Openplanet coroutine primitives (`startnew`, `yield`)
 - String literals (single/double quoted, escape sequences)
 - Numeric literals (integer, float, hex)
 - Line and block comments
@@ -472,7 +472,7 @@ CI fails on any per-character scope mismatch.
 `packages/grammar/tests/`:
 - **`fixtures/`** — ~30 hand-written micro-fixture `*.as` files, one per language feature.
   These are the unit tests of the grammar.
-- **`corpus/`** — 50+ real OpenPlanet plugin files for snapshot testing. Inline in the repo.
+- **`corpus/`** — 50+ real Openplanet plugin files for snapshot testing. Inline in the repo.
   Snapshot files record the full scope-stream per file; regressions require explicit `--update`
   approval. Corpus is refreshed periodically (see `docs/internal/update-corpus-prompt.md`).
 - **`negative/`** — ~10 intentionally malformed files; assert the grammar produces some output

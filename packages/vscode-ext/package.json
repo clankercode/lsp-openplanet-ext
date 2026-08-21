@@ -1,7 +1,7 @@
 {
   "name": "openplanet-lsp-vscode",
-  "displayName": "OpenPlanet LSP",
-  "description": "Language support for OpenPlanet AngelScript plugins (openplanet-lsp wrapper)",
+  "displayName": "Openplanet LSP",
+  "description": "Language support for Openplanet AngelScript plugins (openplanet-lsp wrapper)",
   "version": "0.3.0",
   "private": true,
   "publisher": "clankercode",
@@ -57,11 +57,11 @@
       {
         "command": "openplanetLsp.restart",
         "title": "Restart Server",
-        "category": "OpenPlanet LSP"
+        "category": "Openplanet LSP"
       }
     ],
     "configuration": {
-      "title": "OpenPlanet LSP",
+      "title": "Openplanet LSP",
       "properties": {
         "openplanetLsp.serverPath": {
           "type": "string",
@@ -71,12 +71,12 @@
         "openplanetLsp.openplanetDir": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Path to the OpenPlanet installation directory (auto-detected when empty). When set, forwarded to the server as `openplanet_dir` — overrides `.openplanet-lsp.toml`."
+          "markdownDescription": "Path to the Openplanet installation directory (auto-detected when empty). When set, forwarded to the server as `openplanet_dir` — overrides `.openplanet-lsp.toml`."
         },
         "openplanetLsp.pluginsDir": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Path to the OpenPlanet plugins directory (auto-detected when empty). When set, forwarded to the server as `plugins_dir` — overrides `.openplanet-lsp.toml`."
+          "markdownDescription": "Path to the Openplanet plugins directory (auto-detected when empty). When set, forwarded to the server as `plugins_dir` — overrides `.openplanet-lsp.toml`."
         },
         "openplanetLsp.gameTarget": {
           "type": "string",
