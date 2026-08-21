@@ -18,6 +18,8 @@ export interface OpenplanetLspSettings {
   pluginsDir?: string;
   gameTarget?: string;
   defines?: string[];
+  /** Manual plugin-root override: dirs containing info.toml. When empty, the server auto-discovers. */
+  pluginRoots?: string[];
 }
 
 /** Valid `game_target` values accepted by the server (config.rs defines_for_target). */
@@ -64,6 +66,14 @@ export function buildInitializationOptions(
   }
   if (settings.defines && settings.defines.length > 0) {
     opts.defines = settings.defines;
+  }
+  if (settings.pluginRoots && settings.pluginRoots.length > 0) {
+    // Non-empty replaces the server's automatic downward workspace scan;
+    // empty/unset forwards nothing so auto-discovery keeps control (t2).
+    const roots = settings.pluginRoots.filter((r) => r.trim() !== '');
+    if (roots.length > 0) {
+      opts.plugin_roots = roots;
+    }
   }
   return opts;
 }

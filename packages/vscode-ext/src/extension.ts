@@ -21,6 +21,7 @@ function readSettings(): OpenplanetLspSettings {
     pluginsDir: config.get<string>('pluginsDir', ''),
     gameTarget: config.get<string>('gameTarget', 'TMNEXT'),
     defines: config.get<string[]>('defines', []),
+    pluginRoots: config.get<string[]>('pluginRoots', []),
   };
 }
 

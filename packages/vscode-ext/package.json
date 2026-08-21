@@ -101,6 +101,14 @@
           },
           "default": [],
           "markdownDescription": "Extra preprocessor defines (replaces the game-target defaults when non-empty). Forwarded to the server as `defines`."
+        },
+        "openplanetLsp.pluginRoots": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Directories containing an `info.toml` (plugin roots), absolute or workspace-relative. When non-empty, forwarded to the server as `plugin_roots` and it **replaces** the server's automatic downward workspace scan. When empty/unset nothing is forwarded and the server auto-discovers plugin roots by scanning the workspace."
         }
       }
     }

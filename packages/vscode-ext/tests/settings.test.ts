@@ -64,6 +64,35 @@ describe('buildInitializationOptions', () => {
     expect('serverPath' in opts).toBe(false);
     expect('server_path' in opts).toBe(false);
   });
+
+  it('omits pluginRoots when unset', () => {
+    const opts = buildInitializationOptions({});
+    expect(opts).toEqual({});
+    expect('plugin_roots' in opts).toBe(false);
+  });
+
+  it('omits pluginRoots when empty (server auto-discovers)', () => {
+    const opts = buildInitializationOptions({ pluginRoots: [] });
+    expect(opts).toEqual({});
+    expect('plugin_roots' in opts).toBe(false);
+  });
+
+  it('forwards non-empty pluginRoots verbatim as plugin_roots', () => {
+    const pluginRoots = ['/home/u/plugins/my-plugin', '../sibling/other-plugin'];
+    const opts = buildInitializationOptions({ pluginRoots });
+    expect(opts).toEqual({ plugin_roots: pluginRoots });
+  });
+
+  it('omits pluginRoots when all entries are empty strings', () => {
+    const opts = buildInitializationOptions({ pluginRoots: ['', '   '] });
+    expect(opts).toEqual({});
+    expect('plugin_roots' in opts).toBe(false);
+  });
+
+  it('filters empty entries out of pluginRoots', () => {
+    const opts = buildInitializationOptions({ pluginRoots: ['', '/home/u/plugins/p', '  '] });
+    expect(opts).toEqual({ plugin_roots: ['/home/u/plugins/p'] });
+  });
 });
 
 describe('isValidGameTarget', () => {
