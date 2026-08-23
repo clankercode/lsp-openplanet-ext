@@ -43,7 +43,11 @@
         "extensions": [
           ".as"
         ],
-        "configuration": "./language-configuration.json"
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "dark": "./resources/openplanet-bigger-white.png",
+          "light": "./resources/openplanet-bigger.png"
+        }
       }
     ],
     "grammars": [
