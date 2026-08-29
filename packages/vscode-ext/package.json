@@ -31,7 +31,10 @@
       "description": "The language server analyzes workspace files and openplanetLsp.serverPath executes a configured binary. File contents are sent to the server process."
     }
   },
-  "activationEvents": [],
+  "activationEvents": [
+    "onLanguage:angelscript",
+    "workspaceContains:**/info.toml"
+  ],
   "contributes": {
     "languages": [
       {
@@ -67,6 +70,21 @@
       {
         "command": "openplanetLsp.restart",
         "title": "Restart Server",
+        "category": "Openplanet LSP"
+      },
+      {
+        "command": "openplanetLsp.restartVerbose",
+        "title": "Restart Server with Verbose Logging",
+        "category": "Openplanet LSP"
+      },
+      {
+        "command": "openplanetLsp.showLogs",
+        "title": "Show Logs",
+        "category": "Openplanet LSP"
+      },
+      {
+        "command": "openplanetLsp.showStatus",
+        "title": "Show Status",
         "category": "Openplanet LSP"
       }
     ],

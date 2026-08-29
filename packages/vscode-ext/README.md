@@ -87,7 +87,28 @@ cited in the snippet file itself.
 
 ## Commands
 
-- **Openplanet LSP: Restart Server** — restart the language server.
+All under the **Openplanet LSP** category in the command palette:
+
+- **Restart Server** — restart the language server.
+- **Restart Server with Verbose Logging** — same, but with `RUST_LOG=debug` in
+  the server's environment. Use it to reproduce a problem for a bug report without
+  editing any settings; a plain restart turns it back off.
+- **Show Logs** — reveal the _Openplanet LSP_ output channel.
+- **Show Status** — open a read-only document with the resolved server path and
+  version, the type DB versions, your effective settings, and your workspace roots.
+  Home directories are shown as `~`, and no environment variables are included, so
+  it is safe to paste straight into an issue.
+
+## Status bar
+
+An indicator on the right shows whether the server is starting, ready, restarting,
+or failed — the failed state is coloured with the editor's error background. Hover
+it for the resolved binary, its version, the type DB versions and where they came
+from, the active game target, and the workspace root of the file you are looking at
+(which follows the active editor in a multi-root workspace). Click it to open the log.
+
+The indicator is driven by the language client's own state events and two one-shot
+probes taken when a server starts. It never polls.
 
 ## Untrusted workspaces
 

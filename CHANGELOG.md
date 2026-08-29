@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Status bar indicator and diagnostic commands (B043): the status bar shows
+  whether the server is starting, ready, restarting or failed (the failed state
+  uses the editor's error colour), with a tooltip carrying the resolved binary,
+  its version, the type DB versions and source, the active game target and the
+  workspace root of the active editor. Clicking it opens the log. New commands:
+  **Show Logs**, **Show Status** (a read-only document of the resolved
+  configuration, home directories abbreviated to `~` and no environment
+  variables, meant to be pasted into a bug report) and **Restart Server with
+  Verbose Logging** (`RUST_LOG=debug`, cleared again by a plain restart).
+  `activationEvents` is now explicit (`onLanguage:angelscript`,
+  `workspaceContains:**/info.toml`) instead of relying on inference, so the
+  indicator appears in Openplanet workspaces and not in every window. The
+  indicator is event-driven and never polls.
+
 - AngelScript snippets for Openplanet plugin boilerplate (B042): the documented
   callbacks useful for plugin boilerplate (`Main`, `Update`, `Render`,
   `RenderEarly`, `RenderInterface`, `RenderMenu`, `RenderMenuMain`, the
