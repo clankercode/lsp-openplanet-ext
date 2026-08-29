@@ -107,6 +107,22 @@ describe('abbreviateHomeInText', () => {
     ).toBe('spawn ~/bin/openplanet-lsp.exe failed');
   });
 
+  it('redacts standalone home aliases before prose punctuation without matching siblings', () => {
+    expect(abbreviateHomeInText('failed to open /home/max (EACCES)', ['/home/max'], 'linux')).toBe(
+      'failed to open ~ (EACCES)',
+    );
+    expect(
+      abbreviateHomeInText(
+        'failed to open C:\\Users\\Max: access denied',
+        ['C:\\Users\\Max'],
+        'win32',
+      ),
+    ).toBe('failed to open ~: access denied');
+    expect(
+      abbreviateHomeInText('failed to open /home/maxwell (EACCES)', ['/home/max'], 'linux'),
+    ).toBe('failed to open /home/maxwell (EACCES)');
+  });
+
   it('redacts a canonical home alias when HOME itself is a symlink', () => {
     expect(
       abbreviateHomeInText(

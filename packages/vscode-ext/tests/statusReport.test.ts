@@ -102,6 +102,25 @@ describe('buildStatusReport', () => {
     expect(out).toContain('spawn ~/bin/openplanet-lsp.exe failed');
   });
 
+  it('redacts standalone POSIX and Windows home paths in failure prose', () => {
+    const posix = buildStatusReport({
+      ...full,
+      state: 'failed',
+      failureReason: 'failed to open /home/max (EACCES)',
+    });
+    expect(posix).not.toContain('/home/max');
+    expect(posix).toContain('failed to open ~ (EACCES)');
+
+    const windows = buildStatusReport({
+      state: 'failed',
+      failureReason: 'failed to open C:\\Users\\Max: access denied',
+      platform: 'win32',
+      home: 'C:\\Users\\Max',
+    });
+    expect(windows).not.toContain('Users\\Max');
+    expect(windows).toContain('failed to open ~: access denied');
+  });
+
   it('degrades to placeholders with nothing resolved and no workspace', () => {
     const out = buildStatusReport({ state: 'starting' });
     expect(out).toContain('unknown');

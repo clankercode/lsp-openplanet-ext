@@ -104,7 +104,11 @@ export function abbreviateHomeInText(
         before === undefined ||
         !isPathCharacter(before) ||
         (alias.startsWith('/') && before === '/');
-      const endsOnBoundary = after === undefined || isSeparator(after, platform);
+      // A home directory can end a path in diagnostic prose too: "failed to
+      // open /home/max (EACCES)". Keep word-like continuations guarded so a
+      // sibling such as /home/maxwell is never partially replaced.
+      const endsOnBoundary =
+        after === undefined || isSeparator(after, platform) || !/[A-Za-z0-9_.~]/.test(after);
 
       if (startsOnBoundary && endsOnBoundary) {
         redacted += result.slice(cursor, index) + '~';
