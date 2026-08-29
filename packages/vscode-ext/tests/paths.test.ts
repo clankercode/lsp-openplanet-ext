@@ -194,3 +194,77 @@ describe('abbreviateHomeInText', () => {
     ).toBe('type DB read from ~/OpenplanetNext');
   });
 });
+
+/**
+ * Diagnostic prose corpus (B043).
+ *
+ * The four preceding redaction fixes each patched one shape of prose, so this
+ * pins the property instead of another example: whatever punctuation a server
+ * error, a spawn failure or an env-var dump puts in front of a path, the home
+ * directory must not survive into text a user pastes into a public issue.
+ *
+ * A missed redaction publishes the user's account name. A false redaction is
+ * cosmetic damage to a diagnostic dump. The rules below are therefore
+ * deliberately asymmetric, and the negatives that follow are the ones where a
+ * false redaction would ALSO leak (a sibling directory mangled into `~well`).
+ */
+const LEAKY_PROSE: [name: string, text: string][] = [
+  ['spawn error', 'spawn /home/max/.local/bin/openplanet-lsp ENOENT'],
+  ['key=value', 'cwd=/home/max/src/plugin'],
+  ['setting=value', 'serverPath=/home/max/bin/openplanet-lsp'],
+  ['label:value', 'launching:/home/max/bin/x'],
+  ['env var', 'HOME=/home/max'],
+  ['colon-separated list', 'PATH=/usr/bin:/home/max/bin'],
+  ['comma-separated pairs', 'a=/home/max,b=/home/max/x'],
+  ['flag-adjacent', 'ELOOP -/home/max/x'],
+  ['at-separated', 'user@/home/max/y'],
+  ['file URI', 'file:///home/max/src/Main.as'],
+  ['quoted', "Error: EACCES, open '/home/max/x'"],
+  ['end of sentence', 'could not read /home/max.'],
+  ['parenthesised', 'failed to open /home/max (EACCES)'],
+];
+
+describe('abbreviateHomeInText over realistic diagnostic prose', () => {
+  const home = '/home/max';
+
+  it.each(LEAKY_PROSE)('redacts the home directory in a %s', (_name, text) => {
+    const out = abbreviateHomeInText(text, [home], 'linux');
+    expect(out, `leaked in: ${JSON.stringify(out)}`).not.toContain(home);
+  });
+
+  it('keeps a sibling directory intact rather than mangling it', () => {
+    // `/home/maxwell` must survive whole: a partial replacement would read
+    // `~well` and still name the account.
+    const out = abbreviateHomeInText('read /home/maxwell/x then /home/max/y', [home], 'linux');
+    expect(out).toBe('read /home/maxwell/x then ~/y');
+  });
+
+  it('keeps a sibling that differs only after a dot', () => {
+    const out = abbreviateHomeInText('open /home/max.backup/x', [home], 'linux');
+    expect(out).toBe('open /home/max.backup/x');
+  });
+
+  it('does not rewrite an unrelated path that merely contains the home path', () => {
+    // /mnt/backup/home/max is somebody's archive, not this user's home.
+    const out = abbreviateHomeInText('restore /mnt/backup/home/max/x', [home], 'linux');
+    expect(out).toBe('restore /mnt/backup/home/max/x');
+  });
+
+  it('redacts every alias, so a symlinked home is covered both ways', () => {
+    const out = abbreviateHomeInText(
+      'cwd=/mnt/data/max/src and bin=/home/max/bin',
+      ['/home/max', '/mnt/data/max'],
+      'linux',
+    );
+    expect(out).toBe('cwd=~/src and bin=~/bin');
+  });
+
+  it('redacts a windows home behind a key=value', () => {
+    const out = abbreviateHomeInText(
+      'serverPath=C:\\Users\\Max\\bin\\openplanet-lsp.exe',
+      ['C:\\Users\\max'],
+      'win32',
+    );
+    expect(out).toBe('serverPath=~\\bin\\openplanet-lsp.exe');
+  });
+});

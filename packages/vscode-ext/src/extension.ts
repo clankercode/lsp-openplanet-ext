@@ -84,24 +84,27 @@ function redactHome(text: string | undefined, home = homeDir()): string | undefi
 }
 
 /**
- * StatusInfo is rendered straight into the status-bar tooltip. Redact its
- * path-bearing fields before retaining them, so later paints cannot expose
- * either the logical HOME path or its realpath alias.
+ * Redact every string reaching the status bar tooltip.
+ *
+ * Generic on purpose. The per-field version of this listed the path-bearing
+ * keys by hand, so a field added later was a leak waiting to happen - which is
+ * exactly how several home-path leaks got shipped. Walking the values instead
+ * means a new StatusInfo field is redacted by default, and the enum-ish ones
+ * (`state`) pass through the redactor unchanged anyway.
  */
 function redactStatusPatch(patch: Partial<StatusInfo>): Partial<StatusInfo> {
-  const redacted = { ...patch };
   const home = homeDir();
-
-  if ('failureReason' in redacted)
-    redacted.failureReason = redactHome(redacted.failureReason, home);
-  if ('serverPath' in redacted) redacted.serverPath = redactHome(redacted.serverPath, home);
-  if ('workspaceRoot' in redacted)
-    redacted.workspaceRoot = redactHome(redacted.workspaceRoot, home);
-  if ('typeDb' in redacted && redacted.typeDb) {
-    redacted.typeDb = { ...redacted.typeDb, source: redactHome(redacted.typeDb.source, home) };
-  }
-
-  return redacted;
+  const redactValue = (value: unknown): unknown => {
+    if (typeof value === 'string') return redactHome(value, home);
+    if (Array.isArray(value)) return value.map(redactValue);
+    if (value !== null && typeof value === 'object') {
+      return Object.fromEntries(
+        Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, redactValue(v)]),
+      );
+    }
+    return value;
+  };
+  return redactValue({ ...patch }) as Partial<StatusInfo>;
 }
 
 function isCurrentStart(generation: number, candidate?: LanguageClient): boolean {

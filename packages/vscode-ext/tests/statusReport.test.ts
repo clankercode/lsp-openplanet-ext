@@ -154,3 +154,57 @@ describe('buildStatusReport', () => {
     expect(out).toContain('~\\bin\\openplanet-lsp.exe');
   });
 });
+
+/**
+ * Choke-point regressions (B043).
+ *
+ * The per-shape tests above each pin one leak that shipped. These pin the
+ * PROPERTY instead: redaction happens once, at render, for every field - so a
+ * field added later cannot reach a public paste unredacted. Four successive
+ * leaks came from each call site redacting for itself.
+ */
+describe('buildStatusReport redaction choke point', () => {
+  const home = '/home/max';
+  const poisoned = '/home/max/leak';
+
+  it('leaks no home path from ANY string field', () => {
+    const out = buildStatusReport({
+      state: 'failed',
+      failureReason: `failed at ${poisoned}`,
+      serverPath: poisoned,
+      serverSource: `resolved from ${poisoned}`,
+      serverVersion: poisoned,
+      typeDb: { core: poisoned, game: poisoned, source: poisoned },
+      gameTarget: poisoned,
+      signatureMode: poisoned,
+      unused: poisoned,
+      inactiveRegions: poisoned,
+      defines: [poisoned],
+      pluginRoots: [poisoned],
+      workspaceFolders: [poisoned, `${poisoned}/two`],
+      activeWorkspaceRoot: poisoned,
+      extensionVersion: poisoned,
+      vscodeVersion: poisoned,
+      platform: 'linux',
+      home,
+    });
+    expect(out, `leaked: ${out}`).not.toContain(home);
+    expect(out).toContain('~/leak');
+  });
+
+  it('redacts every field for a symlinked home, via both aliases', () => {
+    const out = buildStatusReport({
+      state: 'ready',
+      serverPath: '/mnt/data/max/bin/openplanet-lsp',
+      workspaceFolders: ['/home/max/src'],
+      platform: 'linux',
+      homeAliases: ['/home/max', '/mnt/data/max'],
+    });
+    expect(out).not.toContain('/home/max');
+    expect(out).not.toContain('/mnt/data/max');
+  });
+
+  it('still omits the failure line entirely when the server has not failed', () => {
+    expect(buildStatusReport({ state: 'ready', platform: 'linux', home })).not.toContain('Failure');
+  });
+});

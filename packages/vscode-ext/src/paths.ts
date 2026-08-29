@@ -54,103 +54,96 @@ export function abbreviateHome(
   return p;
 }
 
-function isSeparator(ch: string, platform: string): boolean {
-  return ch === '/' || (isWindows(platform) && ch === '\\');
+/**
+ * Longest-first, de-duplicated, trailing-separator-trimmed home aliases.
+ * `/` and `` are dropped: they would abbreviate every absolute path.
+ */
+function homeAliases(homes: readonly string[]): string[] {
+  return [
+    ...new Set(
+      homes
+        .filter((h): h is string => typeof h === 'string')
+        .map((h) => h.replace(/[\\/]+$/, ''))
+        .filter((h) => h !== '' && h !== '/' && h !== '\\'),
+    ),
+  ].sort((a, b) => b.length - a.length);
 }
 
-/** True when a character immediately before a path makes it part of prose. */
-function isPathPrefixCharacter(ch: string): boolean {
-  return /[A-Za-z0-9_.~\\/\\:@%+=,-]/.test(ch);
-}
-
-/** True for a character that can continue a filesystem path component. */
-function isPathComponentCharacter(ch: string, platform: string): boolean {
-  // Whitespace ends a path token in diagnostic prose, even though POSIX can
-  // represent it in a filename.
-  if (isSeparator(ch, platform) || ch === '\0' || /\s/.test(ch)) return false;
-
-  // POSIX permits every non-NUL, non-slash character in a path component.
-  // Windows is more restrictive, but a dash is valid on both platforms (as
-  // are many characters that would be too easy to misclassify as prose).
-  return !isWindows(platform) || !/[<>:"|?*\x00-\x1F]/.test(ch);
+/** First alias that abbreviates `p`, or `p` unchanged. */
+function abbreviateAny(p: string, aliases: readonly string[], platform: string): string {
+  for (const alias of aliases) {
+    const out = abbreviateHome(p, alias, platform);
+    if (out !== undefined && out !== p) return out;
+  }
+  return p;
 }
 
 /**
- * A POSIX filename may contain punctuation, but diagnostic prose routinely
- * terminates an otherwise-complete path with it. Only treat punctuation as a
- * boundary when its following context is prose too, so `/home/max.backup`
- * remains a sibling path while `/home/max. Retry` is redacted.
+ * Characters that separate a path from surrounding prose.
+ *
+ * `:` is a delimiter on POSIX (`PATH=a:b`, `launching:/path`) but NOT on
+ * Windows, where `C:\` is structural.
  */
-function isTerminalProsePunctuation(text: string, index: number): boolean {
-  const punctuation = text[index];
-  if (punctuation === undefined || !/[.,;:!?\)\]\}"']/.test(punctuation)) return false;
-
-  const next = text[index + 1];
-  return next === undefined || /\s/.test(next) || /[\)\]\}"']/.test(next);
+function delimiters(platform: string): RegExp {
+  const chars = '\\s"\'`,;=<>()\\[\\]{}|@!?*' + (isWindows(platform) ? '' : ':');
+  return new RegExp(`([${chars}]+)`);
 }
+
+/**
+ * Noise that can precede an absolute path inside a single prose token: CLI
+ * dashes, a URI scheme, and the surplus separators in `file:///`.
+ *
+ * The scheme branch requires a following `//` so a Windows drive letter
+ * (`C:\Users\...`) is not mistaken for one - that mistake ate the drive and
+ * let the whole path through.
+ */
+const LEADING_NOISE = /^-*(?:[A-Za-z][A-Za-z0-9+.-]*:(?=\/\/))?(?:[\\/](?=[\\/]))*/;
+
+/** Sentence punctuation that ends a path in prose but never in a filename. */
+const TRAILING_PROSE = /[.,;:!?]+$/;
 
 /**
  * Redact every home-path occurrence in diagnostic prose.
  *
- * `abbreviateHome` deliberately only accepts a complete path. Server errors
- * are prose such as "spawn /home/max/bin/... failed", so report rendering
- * needs a boundary-aware text variant. Multiple aliases cover the physical
- * path when the logical HOME path is a symlink.
+ * `abbreviateHome` only accepts a complete path, but server errors are prose
+ * ("spawn /home/max/bin/... ENOENT", "cwd=/home/max/src"), so the report needs
+ * a text variant. Rather than reason character-by-character about what counts
+ * as a path boundary - four separate leaks came out of exactly that - this
+ * splits the text on the punctuation that separates a path from prose and
+ * hands each token to the strict matcher.
+ *
+ * The asymmetry is deliberate. A missed redaction publishes the user's account
+ * name; a false one is cosmetic damage to a diagnostic dump. So the leading
+ * side is permissive (any punctuation may precede a path) while the trailing
+ * side keeps the strict component check, because THAT is the side where being
+ * wrong also leaks - `/home/maxwell` half-replaced still reads `~well`.
  */
 export function abbreviateHomeInText(
   text: string | undefined,
   homes: readonly string[],
   platform: string = process.platform,
 ): string | undefined {
-  if (text === undefined || text === '' || homes.length === 0) return text;
+  if (text === undefined || text === '') return text;
+  const aliases = homeAliases(homes);
+  if (aliases.length === 0) return text;
 
-  const aliases = [
-    ...new Set(
-      homes
-        .map((home) => home.replace(/[\\/]+$/, ''))
-        .filter((home) => home !== '' && home !== '/' && home !== '\\')
-        .sort((a, b) => b.length - a.length),
-    ),
-  ];
-  let result = text;
+  return text
+    .split(delimiters(platform))
+    .map((token) => redactToken(token, aliases, platform))
+    .join('');
+}
 
-  for (const alias of aliases) {
-    const normalizedAlias = normalize(alias, platform);
-    const normalizedText = normalize(result, platform);
-    let cursor = 0;
-    let redacted = '';
+function redactToken(token: string, aliases: readonly string[], platform: string): string {
+  if (token === '') return token;
 
-    while (cursor < result.length) {
-      const index = normalizedText.indexOf(normalizedAlias, cursor);
-      if (index < 0) break;
-      const end = index + alias.length;
-      const before = index === 0 ? undefined : result[index - 1];
-      const after = end === result.length ? undefined : result[end];
-      const startsOnBoundary =
-        before === undefined ||
-        !isPathPrefixCharacter(before) ||
-        (alias.startsWith('/') && before === '/');
-      // A home directory can end a path in diagnostic prose too: "failed to
-      // open /home/max (EACCES)". Keep word-like continuations guarded so a
-      // sibling such as /home/maxwell is never partially replaced.
-      const endsOnBoundary =
-        after === undefined ||
-        !isPathComponentCharacter(after, platform) ||
-        isTerminalProsePunctuation(result, end);
+  const noise = LEADING_NOISE.exec(token)?.[0] ?? '';
+  const rest = token.slice(noise.length);
+  const tail = TRAILING_PROSE.exec(rest)?.[0] ?? '';
+  const core = tail === '' ? rest : rest.slice(0, -tail.length);
+  if (core === '') return token;
 
-      if (startsOnBoundary && endsOnBoundary) {
-        redacted += result.slice(cursor, index) + '~';
-        cursor = end;
-      } else {
-        redacted += result.slice(cursor, end);
-        cursor = end;
-      }
-    }
-
-    if (cursor > 0) result = redacted + result.slice(cursor);
-  }
-
-  return result;
+  const abbreviated = abbreviateAny(core, aliases, platform);
+  return abbreviated === core ? token : noise + abbreviated + tail;
 }
 
 /** Map `abbreviateHome` over a list, dropping empties. */

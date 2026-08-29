@@ -752,3 +752,22 @@ describe('deactivate', () => {
     await expect(ext.deactivate() ?? Promise.resolve()).resolves.not.toThrow();
   });
 });
+
+describe('status tooltip redaction choke point', () => {
+  it('redacts a home path arriving in a field no test names by hand', async () => {
+    // The probe result feeds serverVersion, which is not a "path field" and so
+    // was not on the hand-maintained redaction list. Everything reaching the
+    // tooltip must be redacted by default, not by remembering to list it.
+    const probes = (await import('../src/serverProbe')) as unknown as {
+      probeServerVersion: { mockResolvedValueOnce: (v: string) => void };
+    };
+    probes.probeServerVersion.mockResolvedValueOnce(`0.5.0 (built in ${homedir()}/build)`);
+
+    const ext = await loadExtension();
+    ext.activate(makeContext() as never);
+    await settle();
+
+    expect(statusItem().tooltip).not.toContain(homedir());
+    await ext.deactivate();
+  });
+});

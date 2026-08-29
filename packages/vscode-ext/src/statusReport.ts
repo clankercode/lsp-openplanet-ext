@@ -45,20 +45,49 @@ const UNSET = '(unset)';
 const UNKNOWN = 'unknown';
 const NONE = '(none)';
 
-function line(label: string, value: string | undefined, fallback = UNKNOWN): string {
-  return `- ${label}: ${value !== undefined && value.trim() !== '' ? value : fallback}`;
+/** A single rendered line: one label, one or more raw (un-redacted) values. */
+interface Field {
+  label: string;
+  /** Rendered as a comma-joined list; empty means the fallback is used. */
+  values: readonly (string | undefined)[];
+  fallback?: string;
+  /** Drop the line entirely when there is nothing to say. */
+  omitWhenEmpty?: boolean;
 }
 
-function listLine(label: string, values: readonly string[]): string {
-  return `- ${label}: ${values.length > 0 ? values.join(', ') : NONE}`;
+interface Section {
+  title: string;
+  fields: Field[];
 }
 
-function typeDbLines(db: TypeDbInfo | undefined): string[] {
-  if (!db) return [line('Type DB', undefined)];
+/**
+ * Render one field, redacting here and ONLY here.
+ *
+ * This is the choke point. Every value in the document passes through this
+ * function, so a field added to `sections` below cannot be shipped without
+ * redaction - which is what went wrong four times when each call site
+ * remembered (or forgot) to redact for itself.
+ */
+function renderField(
+  field: Field,
+  redact: (v: string | undefined) => string | undefined,
+): string | undefined {
+  const values = field.values
+    .map(redact)
+    .filter((v): v is string => v !== undefined && v.trim() !== '');
+  if (values.length === 0) {
+    if (field.omitWhenEmpty) return undefined;
+    return `- ${field.label}: ${field.fallback ?? UNKNOWN}`;
+  }
+  return `- ${field.label}: ${values.join(', ')}`;
+}
+
+function typeDbFields(db: TypeDbInfo | undefined): Field[] {
+  if (!db) return [{ label: 'Type DB', values: [] }];
   return [
-    line('Type DB (core)', db.core),
-    line('Type DB (game)', db.game),
-    line('Type DB source', db.source),
+    { label: 'Type DB (core)', values: [db.core] },
+    { label: 'Type DB (game)', values: [db.game] },
+    { label: 'Type DB source', values: [db.source] },
   ];
 }
 
@@ -72,60 +101,59 @@ function typeDbLines(db: TypeDbInfo | undefined): string[] {
 export function buildStatusReport(input: StatusReportInput): string {
   const homes = input.homeAliases ?? (input.home ? [input.home] : []);
   const redact = (value: string | undefined) => abbreviateHomeInText(value, homes, input.platform);
-  const redactAll = (values: readonly string[] | undefined): string[] =>
-    (values ?? [])
-      .filter((value) => value !== undefined && value !== null && value.trim() !== '')
-      .map((value) => redact(value) as string);
+
+  const sections: Section[] = [
+    {
+      title: 'Server',
+      fields: [
+        { label: 'State', values: [input.state] },
+        { label: 'Failure', values: [input.failureReason], omitWhenEmpty: true },
+        { label: 'Binary', values: [input.serverPath] },
+        { label: 'Resolved via', values: [input.serverSource] },
+        { label: 'Version', values: [input.serverVersion] },
+        ...typeDbFields(input.typeDb),
+      ],
+    },
+    {
+      title: 'Configuration',
+      fields: [
+        { label: 'Game target', values: [input.gameTarget], fallback: UNSET },
+        { label: 'Signature mode', values: [input.signatureMode], fallback: UNSET },
+        { label: 'Unused level', values: [input.unused], fallback: UNSET },
+        { label: 'Inactive regions', values: [input.inactiveRegions], fallback: UNSET },
+        { label: 'Extra defines', values: input.defines ?? [], fallback: NONE },
+        { label: 'Plugin roots', values: input.pluginRoots ?? [], fallback: NONE },
+      ],
+    },
+    {
+      title: 'Workspace',
+      fields: [
+        { label: 'Folders', values: input.workspaceFolders ?? [], fallback: NONE },
+        { label: 'Active editor root', values: [input.activeWorkspaceRoot], fallback: NONE },
+      ],
+    },
+    {
+      title: 'Environment',
+      fields: [
+        { label: 'Extension', values: [input.extensionVersion] },
+        { label: 'VS Code', values: [input.vscodeVersion] },
+        { label: 'Platform', values: [input.platform] },
+      ],
+    },
+  ];
 
   const lines: string[] = [
     '# Openplanet LSP status',
     '',
     'Paste this into a bug report. Home directories are shown as `~`.',
-    '',
-    '## Server',
-    '',
-    line('State', redact(input.state)),
   ];
-
-  if (input.failureReason) {
-    lines.push(line('Failure', redact(input.failureReason)));
+  for (const section of sections) {
+    lines.push('', `## ${section.title}`, '');
+    for (const field of section.fields) {
+      const rendered = renderField(field, redact);
+      if (rendered !== undefined) lines.push(rendered);
+    }
   }
-
-  lines.push(
-    line('Binary', redact(input.serverPath)),
-    line('Resolved via', redact(input.serverSource)),
-    line('Version', redact(input.serverVersion)),
-    ...typeDbLines(
-      input.typeDb
-        ? {
-            ...input.typeDb,
-            core: redact(input.typeDb.core),
-            game: redact(input.typeDb.game),
-            source: redact(input.typeDb.source),
-          }
-        : undefined,
-    ),
-    '',
-    '## Configuration',
-    '',
-    line('Game target', redact(input.gameTarget), UNSET),
-    line('Signature mode', redact(input.signatureMode), UNSET),
-    line('Unused level', redact(input.unused), UNSET),
-    line('Inactive regions', redact(input.inactiveRegions), UNSET),
-    listLine('Extra defines', redactAll(input.defines)),
-    listLine('Plugin roots', redactAll(input.pluginRoots)),
-    '',
-    '## Workspace',
-    '',
-    listLine('Folders', redactAll(input.workspaceFolders)),
-    line('Active editor root', redact(input.activeWorkspaceRoot), NONE),
-    '',
-    '## Environment',
-    '',
-    line('Extension', redact(input.extensionVersion)),
-    line('VS Code', redact(input.vscodeVersion)),
-    line('Platform', redact(input.platform)),
-  );
 
   return lines.join('\n') + '\n';
 }
