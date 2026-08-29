@@ -11,6 +11,7 @@ import {
 } from 'vscode-languageclient/node';
 import { buildInitializationOptions, type OpenplanetLspSettings } from './settings';
 import { abbreviateHomeInText } from './paths';
+import { DEFINES_COMMANDS } from './definesCommands';
 import { renderStatusBar, type StatusInfo } from './status';
 import { buildStatusReport } from './statusReport';
 import { probeServerVersion, probeTypeDb } from './serverProbe';
@@ -473,6 +474,16 @@ export function activate(context: vscode.ExtensionContext): void {
       await vscode.window.showTextDocument(doc, { preview: false });
     }),
   );
+
+  // The defines UI (B034). Registered from the table so a command can never be
+  // contributed in package.json without a handler behind it. Each handler
+  // makes exactly one settings write, which the debounced config listener
+  // below turns into exactly one restart.
+  for (const [id, handler] of Object.entries(DEFINES_COMMANDS)) {
+    context.subscriptions.push(
+      vscode.commands.registerCommand(id, () => handler((msg) => outputChannel?.appendLine(msg))),
+    );
+  }
 
   // Multi-root: the interesting root is the one owning the editor you are
   // looking at, so follow the active editor rather than pinning folder 0.

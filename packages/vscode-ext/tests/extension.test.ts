@@ -127,6 +127,11 @@ const EXPECTED_COMMANDS = [
   'openplanetLsp.restartVerbose',
   'openplanetLsp.showLogs',
   'openplanetLsp.showStatus',
+  // The defines UI (B034).
+  'openplanetLsp.defines.manage',
+  'openplanetLsp.defines.add',
+  'openplanetLsp.defines.remove',
+  'openplanetLsp.defines.clearOverrides',
 ];
 
 const EXPECTED_ACTIVATION_EVENTS = [

@@ -11,6 +11,44 @@
  * member shows up as a TypeError in the failing test, not a silent pass.
  */
 
+export interface FakeQuickPickCall {
+  items: unknown[];
+  options: FakeQuickPickOptions | undefined;
+}
+
+export interface FakeQuickPickOptions {
+  canPickMany?: boolean;
+  title?: string;
+  placeHolder?: string;
+  ignoreFocusOut?: boolean;
+  matchOnDescription?: boolean;
+  matchOnDetail?: boolean;
+}
+
+export interface FakeInputBoxOptions {
+  title?: string;
+  prompt?: string;
+  placeHolder?: string;
+  value?: string;
+  ignoreFocusOut?: boolean;
+  validateInput?: (
+    value: string,
+  ) => string | { message: string; severity: number } | undefined | null;
+}
+
+export interface FakeMessageCall {
+  message: string;
+  options: unknown;
+  items: string[];
+}
+
+export interface FakeConfigUpdate {
+  section: string;
+  key: string;
+  value: unknown;
+  target: number | undefined;
+}
+
 export interface Recorded {
   outputChannels: FakeOutputChannel[];
   statusBarItems: FakeStatusBarItem[];
@@ -20,6 +58,13 @@ export interface Recorded {
   openedTextDocuments: FakeTextDocument[];
   warnings: string[];
   errors: string[];
+  infos: string[];
+  /** Full modal/message calls, so the offered buttons can be asserted. */
+  messages: FakeMessageCall[];
+  quickPicks: FakeQuickPickCall[];
+  inputBoxes: FakeInputBoxOptions[];
+  /** Every `WorkspaceConfiguration.update` call, in order. */
+  configUpdates: FakeConfigUpdate[];
   watchers: FakeDisposable[];
   /** Disposables handed to context.subscriptions by the extension. */
   disposedCount: number;
@@ -34,6 +79,11 @@ export const recorded: Recorded = {
   openedTextDocuments: [],
   warnings: [],
   errors: [],
+  infos: [],
+  messages: [],
+  quickPicks: [],
+  inputBoxes: [],
+  configUpdates: [],
   watchers: [],
   disposedCount: 0,
 };
@@ -48,13 +98,22 @@ export function __reset(): void {
   recorded.openedTextDocuments = [];
   recorded.warnings = [];
   recorded.errors = [];
+  recorded.infos = [];
+  recorded.messages = [];
+  recorded.quickPicks = [];
+  recorded.inputBoxes = [];
+  recorded.configUpdates = [];
   recorded.watchers = [];
   recorded.disposedCount = 0;
   configValues = {};
+  configScopes = {};
   workspaceFoldersValue = undefined;
   activeTextEditorValue = undefined;
   activeEditorListeners = [];
   configListeners = [];
+  quickPickQueue = [];
+  inputBoxQueue = [];
+  messageQueue = [];
 }
 
 export class FakeDisposable {
@@ -146,15 +205,65 @@ export interface FakeWorkspaceFolder {
   index: number;
 }
 
+/** Per-scope values for one setting, as `inspect()` reports them. */
+export interface FakeConfigScopes {
+  globalValue?: unknown;
+  workspaceValue?: unknown;
+}
+
 /** Test-facing setters for the ambient workspace/editor state. */
 let configValues: Record<string, unknown> = {};
+let configScopes: Record<string, FakeConfigScopes> = {};
 let workspaceFoldersValue: FakeWorkspaceFolder[] | undefined;
 let activeTextEditorValue: { document: { uri: FakeUri } } | undefined;
 let activeEditorListeners: ((e: unknown) => void)[] = [];
 let configListeners: ((e: { affectsConfiguration: (s: string) => boolean }) => void)[] = [];
 
+/** Scripted answers, consumed one per call. */
+type QuickPickResponder = (items: unknown[], options: FakeQuickPickOptions | undefined) => unknown;
+type InputBoxResponder = (options: FakeInputBoxOptions) => string | undefined;
+type MessageResponder = (message: string, items: string[]) => string | undefined;
+
+let quickPickQueue: QuickPickResponder[] = [];
+let inputBoxQueue: InputBoxResponder[] = [];
+let messageQueue: MessageResponder[] = [];
+
 export function __setConfig(values: Record<string, unknown>): void {
   configValues = values;
+}
+
+/**
+ * Give a setting distinct user-global and workspace values.
+ *
+ * `get()` then resolves the way VS Code does for a non-object setting: the
+ * workspace value REPLACES the user one, it does not merge with it — which is
+ * exactly the trap the defines scope logic has to handle.
+ */
+export function __setConfigScopes(scopes: Record<string, FakeConfigScopes>): void {
+  configScopes = scopes;
+}
+
+/**
+ * Queue one answer for the next `showQuickPick`. Unqueued calls THROW rather
+ * than resolving undefined: a forgotten script should fail the test loudly,
+ * not look like the user pressed Escape.
+ */
+export function __queueQuickPick(responder: QuickPickResponder): void {
+  quickPickQueue.push(responder);
+}
+
+/** Queue one answer for the next `showInputBox`. Unqueued calls throw. */
+export function __queueInputBox(responder: InputBoxResponder): void {
+  inputBoxQueue.push(responder);
+}
+
+/**
+ * Queue one answer for the next warning/information message with buttons.
+ * Unlike the pickers these fall back to `undefined` (dismissed) when
+ * unqueued, because plain notifications are fire-and-forget.
+ */
+export function __queueMessageResponse(responder: MessageResponder): void {
+  messageQueue.push(responder);
 }
 
 export function __setWorkspaceFolders(paths: string[] | undefined): void {
@@ -180,6 +289,19 @@ export function __fireConfigChange(section: string): void {
   }
 }
 
+/**
+ * Record a message call and answer it from the queue.
+ *
+ * The real signatures are `(message, ...items)` and
+ * `(message, options, ...items)`; both are flattened to the button labels.
+ */
+function answerMessage(message: string, rest: unknown[]): string | undefined {
+  const options = typeof rest[0] === 'object' && rest[0] !== null ? rest[0] : undefined;
+  const items = (options ? rest.slice(1) : rest).filter((i): i is string => typeof i === 'string');
+  recorded.messages.push({ message, options, items });
+  return messageQueue.shift()?.(message, items);
+}
+
 export const window = {
   get activeTextEditor() {
     return activeTextEditorValue;
@@ -198,16 +320,39 @@ export const window = {
     recorded.statusBarItems.push(item);
     return item;
   },
-  showWarningMessage(msg: string, ..._items: string[]): Promise<string | undefined> {
+  showWarningMessage(msg: string, ...rest: unknown[]): Promise<string | undefined> {
     recorded.warnings.push(msg);
-    return Promise.resolve(undefined);
+    return Promise.resolve(answerMessage(msg, rest));
   },
-  showErrorMessage(msg: string, ..._items: string[]): Promise<string | undefined> {
+  showErrorMessage(msg: string, ...rest: unknown[]): Promise<string | undefined> {
     recorded.errors.push(msg);
-    return Promise.resolve(undefined);
+    return Promise.resolve(answerMessage(msg, rest));
   },
-  showInformationMessage(_msg: string, ..._items: string[]): Promise<string | undefined> {
-    return Promise.resolve(undefined);
+  showInformationMessage(msg: string, ...rest: unknown[]): Promise<string | undefined> {
+    recorded.infos.push(msg);
+    return Promise.resolve(answerMessage(msg, rest));
+  },
+  showQuickPick(items: unknown[], options?: FakeQuickPickOptions): Promise<unknown> {
+    recorded.quickPicks.push({ items, options });
+    const responder = quickPickQueue.shift();
+    if (!responder) {
+      throw new Error(
+        `unscripted showQuickPick (title=${options?.title ?? '?'}); ` +
+          'queue one with __queueQuickPick',
+      );
+    }
+    return Promise.resolve(responder(items, options));
+  },
+  showInputBox(options?: FakeInputBoxOptions): Promise<string | undefined> {
+    const opts = options ?? {};
+    recorded.inputBoxes.push(opts);
+    const responder = inputBoxQueue.shift();
+    if (!responder) {
+      throw new Error(
+        `unscripted showInputBox (title=${opts.title ?? '?'}); queue one with __queueInputBox`,
+      );
+    }
+    return Promise.resolve(responder(opts));
   },
   showTextDocument(doc: FakeTextDocument, _opts?: unknown): Promise<unknown> {
     recorded.shownTextDocuments.push(doc);
@@ -239,8 +384,33 @@ export const workspace = {
   getConfiguration(section: string) {
     return {
       get<T>(key: string, fallback: T): T {
-        const v = configValues[`${section}.${key}`];
+        const scoped = configScopes[`${section}.${key}`];
+        // A non-object setting does not merge across scopes: workspace wins
+        // outright, then user, then the package.json default.
+        const v = scoped
+          ? (scoped.workspaceValue ?? scoped.globalValue)
+          : configValues[`${section}.${key}`];
         return (v === undefined ? fallback : v) as T;
+      },
+      inspect<T>(key: string) {
+        const scoped = configScopes[`${section}.${key}`] ?? {};
+        return {
+          key: `${section}.${key}`,
+          globalValue: scoped.globalValue as T | undefined,
+          workspaceValue: scoped.workspaceValue as T | undefined,
+        };
+      },
+      update(key: string, value: unknown, target?: number): Promise<void> {
+        recorded.configUpdates.push({ section, key, value, target });
+        // Keep the scope map consistent so a command that reads back after
+        // writing sees what it wrote — and so a workspace write is visibly
+        // NOT a user write.
+        const full = `${section}.${key}`;
+        const scoped = { ...(configScopes[full] ?? {}) };
+        if (target === ConfigurationTarget.Global) scoped.globalValue = value;
+        else scoped.workspaceValue = value;
+        configScopes = { ...configScopes, [full]: scoped };
+        return Promise.resolve();
       },
     };
   },
@@ -279,6 +449,13 @@ export const commands = {
     return Promise.resolve(handler ? handler(...args) : undefined);
   },
 };
+
+/** Mirrors the real enum values — the extension writes to these targets. */
+export const ConfigurationTarget = { Global: 1, Workspace: 2, WorkspaceFolder: 3 } as const;
+
+export const QuickPickItemKind = { Separator: -1, Default: 0 } as const;
+
+export const InputBoxValidationSeverity = { Ignore: 0, Info: 1, Warning: 2, Error: 3 } as const;
 
 export const env = { appName: 'Visual Studio Code' };
 export const version = '1.99.0-test';

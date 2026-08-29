@@ -47,7 +47,10 @@ the way it compiles once signed: `#if SIG_DEVELOPER` blocks go dead below `devel
 
 `defines` is **additive** — entries are added on top of what the game target and signature
 level derive, plus `info.toml` `[script].defines`. Prefix an entry with `-` or `!` to turn
-one off (`-LOGS`).
+one off (`-LOGS`). A removal wins over an add of the same name wherever the two sit in the
+list, so `["DEV", "-DEV"]` leaves `DEV` off. Names are **case sensitive**: `dev` and `DEV`
+are two different defines, and nothing rewrites what you typed. You do not have to edit
+the array by hand — see **Manage Defines** under [Commands](#commands).
 
 `unused` sets how unused functions, variables, parameters and class members are reported:
 `hint` (greyed out in the editor, kept out of the Problems panel), `info` (greyed out and
@@ -98,6 +101,29 @@ All under the **Openplanet LSP** category in the command palette:
   version, the type DB versions, your effective settings, and your workspace roots.
   Home directories are shown as `~`, and no environment variables are included, so
   it is safe to paste straight into an issue.
+- **Manage Defines** — a checklist of your `openplanetLsp.defines` overrides. Checked
+  means on; unchecking one writes the `-NAME` entry that turns it off. The whole
+  checklist is saved in one write, so a session of toggling restarts the server once.
+- **Add Define** — type a name to add. Prefix it with `-` to add an off entry instead.
+  Adding a platform selector for a different game than your `gameTarget` (`MP4`
+  while the target is `TMNEXT`) is flagged, because the server treats it as
+  authoritative and drops the target's own selectors — every `#if TMNEXT` branch
+  would go dead. The warning does not block you; same-generation names like
+  `MP40` under `MP4` are not flagged at all.
+- **Remove Define** — delete entries from the array. This is different from turning a
+  define off: removing an entry means "no opinion", so whatever the game target,
+  signature level and `info.toml` derive applies again.
+- **Clear Define Overrides** — empty the array back to the derived set, behind a
+  confirmation.
+
+Each of these asks whether to write to **Workspace** or **User** settings when a folder
+is open, defaulting to Workspace — a define override is almost always specific to one
+plugin. With no folder open the question is skipped and User settings are used.
+
+The manage checklist currently lists **your own override entries**, labelled
+`user setting`. Showing the full resolved set — the defines the game target, signature
+level, `info.toml` and your dependencies contribute, each labelled with where it came
+from — needs the server to report them, which it does not do yet.
 
 ## Status bar
 

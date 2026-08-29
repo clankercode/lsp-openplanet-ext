@@ -48,6 +48,45 @@ export function isValidGameTarget(v: string): v is GameTarget {
 }
 
 /**
+ * Platform selectors grouped by game generation.
+ *
+ * SOURCE OF TRUTH: `LspConfig::PLATFORM_FAMILIES` in the server's
+ * `src/config.rs` (~line 1152). This is a deliberate duplicate, kept because
+ * the grouping is what makes the GH #36 guard correct and `GAME_TARGETS`
+ * only carries the flat set: with `game_target = MP4`, the name `MP40` is
+ * SAME-family and must not be flagged, which a flat membership test cannot
+ * tell you.
+ *
+ * Drift is cheap by construction. The only consumer is a NON-BLOCKING warning
+ * (`platformSelectorCaution` in defines.ts), so a stale table costs a spurious
+ * warning or a missing one — never a blocked edit and never a behaviour
+ * change. The names are ManiaPlanet/Trackmania generations, which are
+ * historical and effectively frozen. `PLATFORM_FAMILIES` covering exactly
+ * `GAME_TARGETS` is pinned by a test.
+ */
+export const PLATFORM_FAMILIES: readonly (readonly GameTarget[])[] = [
+  ['TMNEXT'],
+  ['MP4', 'MP40', 'MP41'],
+  ['TURBO'],
+  ['MP3'],
+  ['UNITED_FOREVER', 'UNITED'],
+  ['NATIONS_FOREVER'],
+] as const;
+
+/**
+ * The platform selectors a game target implies, or `undefined` for a name
+ * outside the known families. Mirrors `platform_family_for_target`.
+ */
+export function platformFamilyFor(target: string): readonly string[] | undefined {
+  return PLATFORM_FAMILIES.find((family) => (family as readonly string[]).includes(target));
+}
+
+/** True for any known platform selector (`TMNEXT`, `MP41`, `TURBO`, ...). */
+export function isPlatformSelector(name: string): boolean {
+  return platformFamilyFor(name) !== undefined;
+}
+
+/**
  * Valid `signature_mode` values (server config.rs SignatureMode).
  *
  * Openplanet defines a signature macro when the current level is equal or

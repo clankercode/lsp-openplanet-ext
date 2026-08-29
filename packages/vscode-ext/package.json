@@ -37,7 +37,11 @@
     "onCommand:openplanetLsp.restart",
     "onCommand:openplanetLsp.restartVerbose",
     "onCommand:openplanetLsp.showLogs",
-    "onCommand:openplanetLsp.showStatus"
+    "onCommand:openplanetLsp.showStatus",
+    "onCommand:openplanetLsp.defines.manage",
+    "onCommand:openplanetLsp.defines.add",
+    "onCommand:openplanetLsp.defines.remove",
+    "onCommand:openplanetLsp.defines.clearOverrides"
   ],
   "contributes": {
     "languages": [
@@ -89,6 +93,26 @@
       {
         "command": "openplanetLsp.showStatus",
         "title": "Show Status",
+        "category": "Openplanet LSP"
+      },
+      {
+        "command": "openplanetLsp.defines.manage",
+        "title": "Manage Defines",
+        "category": "Openplanet LSP"
+      },
+      {
+        "command": "openplanetLsp.defines.add",
+        "title": "Add Define",
+        "category": "Openplanet LSP"
+      },
+      {
+        "command": "openplanetLsp.defines.remove",
+        "title": "Remove Define",
+        "category": "Openplanet LSP"
+      },
+      {
+        "command": "openplanetLsp.defines.clearOverrides",
+        "title": "Clear Define Overrides",
         "category": "Openplanet LSP"
       }
     ],
@@ -149,7 +173,7 @@
             "type": "string"
           },
           "default": [],
-          "markdownDescription": "Extra preprocessor defines, **added** to the ones the game target and signature level derive and to `info.toml` `[script].defines` — listing `DEV` does not drop `TMNEXT`. Prefix an entry with `-` or `!` to turn a define off (`-LOGS`). Forwarded to the server as `defines`."
+          "markdownDescription": "Extra preprocessor defines, **added** to the ones the game target and signature level derive and to `info.toml` `[script].defines` — listing `DEV` does not drop `TMNEXT`. Prefix an entry with `-` or `!` to turn a define off (`-LOGS`); a removal wins over an add of the same name wherever the two sit in the list. Names are **case sensitive** (`dev` and `DEV` are different defines) and are never rewritten for you. Forwarded to the server as `defines`. The command palette has **Openplanet LSP: Manage Defines** (toggle list), **Add Define**, **Remove Define** and **Clear Define Overrides** if you would rather not edit this by hand."
         },
         "openplanetLsp.unused": {
           "type": "string",

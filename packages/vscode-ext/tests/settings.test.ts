@@ -6,6 +6,9 @@ import {
   isValidUnusedLevel,
   isValidInactiveLevel,
   GAME_TARGETS,
+  PLATFORM_FAMILIES,
+  isPlatformSelector,
+  platformFamilyFor,
   SIGNATURE_MODES,
   UNUSED_LEVELS,
   INACTIVE_LEVELS,
@@ -238,5 +241,35 @@ describe('inactive regions (server B031)', () => {
         inactiveRegions: 'ignore',
       }),
     ).toEqual({ game_target: 'MP4', unused: 'hint', inactive_regions: 'ignore' });
+  });
+});
+
+describe('PLATFORM_FAMILIES', () => {
+  it('covers exactly the game targets, with no duplicates', () => {
+    // Drift guard against `LspConfig::PLATFORM_FAMILIES` (server config.rs).
+    // The two lists are the same names grouped differently, so a target added
+    // to one and not the other is a bug this catches locally.
+    const flat = PLATFORM_FAMILIES.flat();
+    expect([...flat].sort()).toEqual([...GAME_TARGETS].sort());
+    expect(new Set(flat).size).toBe(flat.length);
+  });
+
+  it('groups the ManiaPlanet generations the way the server does', () => {
+    expect(platformFamilyFor('MP4')).toEqual(['MP4', 'MP40', 'MP41']);
+    expect(platformFamilyFor('MP41')).toEqual(['MP4', 'MP40', 'MP41']);
+    expect(platformFamilyFor('UNITED')).toEqual(['UNITED_FOREVER', 'UNITED']);
+    expect(platformFamilyFor('TMNEXT')).toEqual(['TMNEXT']);
+  });
+
+  it('has no family for a name that is not a platform selector', () => {
+    expect(platformFamilyFor('DEV')).toBeUndefined();
+    expect(platformFamilyFor('')).toBeUndefined();
+  });
+
+  it('recognises every selector and nothing else', () => {
+    for (const target of GAME_TARGETS) expect(isPlatformSelector(target)).toBe(true);
+    for (const other of ['DEV', 'LOGS', 'SIG_DEVELOPER', 'tmnext', '']) {
+      expect(isPlatformSelector(other), other).toBe(false);
+    }
   });
 });

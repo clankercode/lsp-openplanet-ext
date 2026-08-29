@@ -9,6 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Command-palette UI for preprocessor defines (B034), so `openplanetLsp.defines`
+  no longer has to be hand-edited as raw JSON: **Manage Defines** (a checklist
+  where checked = on and unchecking writes the `-NAME` entry), **Add Define**,
+  **Remove Define** and **Clear Define Overrides**. Each command asks
+  Workspace/User when a folder is open — defaulting to Workspace, since a define
+  override is nearly always project-specific — and skips the question when no
+  folder is open. A whole edit batch is **one** settings write, so a session of
+  toggling restarts the server once rather than once per row. A first Workspace
+  edit is seeded from the User value it is about to shadow, because a VS Code
+  array setting replaces rather than merges across scopes. The edit logic lives
+  in `packages/vscode-ext/src/defines.ts`, pure and pinned to the server's own
+  `apply_define_overrides` semantics: a `-`/`!` removal beats an add of the same
+  name wherever the two sit in the list, and names are compared byte-for-byte, so
+  the UI preserves case rather than upcasing (`dev` and `DEV` are different
+  defines). Names the server would drop are refused; names it keeps but no `#if`
+  can reference (`MY DEFINE`, `1FOO`, `DIPS++`) are accepted with a warning that
+  points at Openplanet's own `_` mapping. **Known limit:** the checklist lists
+  your own override entries only. Showing the full resolved set with each
+  define's origin needs a server request that does not exist yet; the pure module
+  already accepts such a set and produces minimal writes from it. **Add Define**
+  and the manage checklist also guard the GH #36 footgun the palette newly puts
+  one keystroke away: adding a platform selector foreign to your `gameTarget`
+  (`MP4` while the target is `TMNEXT`) makes the server drop the target's own
+  selectors, killing every `#if TMNEXT` branch, and it only says so on stderr.
+  The warning is non-blocking and same-family names (`MP40` under `MP4`) are
+  silent.
+
 - Status bar indicator and diagnostic commands (B043): the status bar shows
   whether the server is starting, ready, restarting or failed (the failed state
   uses the editor's error colour), with a tooltip carrying the resolved binary,
