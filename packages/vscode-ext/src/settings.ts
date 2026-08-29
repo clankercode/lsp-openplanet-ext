@@ -24,6 +24,8 @@ export interface OpenplanetLspSettings {
   pluginRoots?: string[];
   /** How unused declarations are reported (server B030). '' = unset. */
   unused?: string;
+  /** How preprocessor-dead `#if` branches are greyed out (server B031). '' = unset. */
+  inactiveRegions?: string;
 }
 
 /** Valid `game_target` values accepted by the server (config.rs defines_for_target). */
@@ -79,6 +81,23 @@ export function isValidUnusedLevel(v: string): v is UnusedLevel {
 }
 
 /**
+ * Valid `inactive_regions` values accepted by the server (config.rs
+ * InactiveLevel).
+ *
+ * Deliberately no warn/error: a branch that is off for the current target is
+ * dead BY DESIGN, not a defect. `hint` fades it in the editor without listing
+ * it; `info` also lists it. The fade itself comes from the LSP `Unnecessary`
+ * tag, which the server sends at both levels.
+ */
+export const INACTIVE_LEVELS = ['ignore', 'hint', 'info'] as const;
+
+export type InactiveLevel = (typeof INACTIVE_LEVELS)[number];
+
+export function isValidInactiveLevel(v: string): v is InactiveLevel {
+  return (INACTIVE_LEVELS as readonly string[]).includes(v);
+}
+
+/**
  * Build the `initializationOptions` object to send at `initialize`.
  * Only includes keys with non-empty values (see precedence contract above).
  * Returns an empty object when nothing is set — sending `{}` is fine; the
@@ -118,6 +137,15 @@ export function buildInitializationOptions(
     const level = settings.unused.trim();
     if (isValidUnusedLevel(level)) {
       opts.unused = level;
+    }
+  }
+  if (settings.inactiveRegions && settings.inactiveRegions.trim() !== '') {
+    // Same unset-means-silent contract as `unused`: the setting's default is
+    // '', so a workspace .openplanet-lsp.toml keeps control until the user
+    // picks a level.
+    const level = settings.inactiveRegions.trim();
+    if (isValidInactiveLevel(level)) {
+      opts.inactive_regions = level;
     }
   }
   if (settings.pluginRoots && settings.pluginRoots.length > 0) {

@@ -144,6 +144,23 @@
           ],
           "markdownDescription": "How unused functions / variables / parameters / class members are reported. `hint` and `info` report the same findings at a quieter severity and never fail a `check`, not even under `--warnings-as-errors`. Findings are tagged `Unnecessary` at every level, so the declaration is faded in the editor regardless (see `editor.showUnused`). Forwarded to the server as `unused`; left empty nothing is sent, so a workspace `.openplanet-lsp.toml` keeps control. Changing this restarts the server."
         },
+        "openplanetLsp.inactiveRegions": {
+          "type": "string",
+          "default": "",
+          "enum": [
+            "",
+            "ignore",
+            "hint",
+            "info"
+          ],
+          "enumDescriptions": [
+            "Unset — the workspace .openplanet-lsp.toml or the user config decides (server default: hint).",
+            "Do not mark inactive branches at all.",
+            "Grey the dead branch out in the editor, without listing it in the Problems panel.",
+            "Grey the dead branch out and list it in the Problems panel."
+          ],
+          "markdownDescription": "Grey out `#if` branches that the current preprocessor defines switch off, the way an IDE fades `#if 0` in C. Forwarded to the server as `inactive_regions`; left empty nothing is sent, so a workspace `.openplanet-lsp.toml` keeps control. There is deliberately no warning/error level: a branch that is off for your target is dead by design, not a defect, and `openplanet-lsp check` never reports these at all. The fade needs `editor.showUnused` (on by default). Changing this restarts the server."
+        },
         "openplanetLsp.pluginRoots": {
           "type": "array",
           "items": {

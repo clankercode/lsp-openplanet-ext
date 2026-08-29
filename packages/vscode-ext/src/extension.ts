@@ -24,6 +24,7 @@ function readSettings(): OpenplanetLspSettings {
     defines: config.get<string[]>('defines', []),
     pluginRoots: config.get<string[]>('pluginRoots', []),
     unused: config.get<string>('unused', ''),
+    inactiveRegions: config.get<string>('inactiveRegions', ''),
   };
 }
 

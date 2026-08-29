@@ -4,9 +4,11 @@ import {
   isValidGameTarget,
   isValidSignatureMode,
   isValidUnusedLevel,
+  isValidInactiveLevel,
   GAME_TARGETS,
   SIGNATURE_MODES,
   UNUSED_LEVELS,
+  INACTIVE_LEVELS,
 } from '../src/settings.js';
 
 describe('buildInitializationOptions', () => {
@@ -189,5 +191,52 @@ describe('unused level (server B030)', () => {
         defines: ['DEV'],
       }),
     ).toEqual({ game_target: 'MP4', unused: 'hint', defines: ['DEV'] });
+  });
+});
+
+describe('inactive regions (server B031)', () => {
+  it('forwards each documented level verbatim', () => {
+    for (const level of INACTIVE_LEVELS) {
+      expect(buildInitializationOptions({ inactiveRegions: level })).toEqual({
+        inactive_regions: level,
+      });
+    }
+  });
+
+  it('omits an unset / empty / whitespace value so the repo config keeps control', () => {
+    expect(buildInitializationOptions({})).toEqual({});
+    expect(buildInitializationOptions({ inactiveRegions: '' })).toEqual({});
+    expect(buildInitializationOptions({ inactiveRegions: '   ' })).toEqual({});
+  });
+
+  it('forwards hint when the user picks the server default explicitly', () => {
+    expect(buildInitializationOptions({ inactiveRegions: 'hint' })).toEqual({
+      inactive_regions: 'hint',
+    });
+  });
+
+  it('omits an unknown level rather than sending garbage', () => {
+    // warn/error are deliberately not levels here: a dead branch is dead by
+    // design, not a defect.
+    for (const bad of ['warn', 'error', 'banana', 'HINT', 'grey', 'true']) {
+      expect(buildInitializationOptions({ inactiveRegions: bad })).toEqual({});
+    }
+  });
+
+  it('validates the canonical set only', () => {
+    for (const level of INACTIVE_LEVELS) expect(isValidInactiveLevel(level)).toBe(true);
+    expect(isValidInactiveLevel('warn')).toBe(false);
+    expect(isValidInactiveLevel('')).toBe(false);
+    expect(INACTIVE_LEVELS).toEqual(['ignore', 'hint', 'info']);
+  });
+
+  it('rides alongside the other keys', () => {
+    expect(
+      buildInitializationOptions({
+        gameTarget: 'MP4',
+        unused: 'hint',
+        inactiveRegions: 'ignore',
+      }),
+    ).toEqual({ game_target: 'MP4', unused: 'hint', inactive_regions: 'ignore' });
   });
 });
