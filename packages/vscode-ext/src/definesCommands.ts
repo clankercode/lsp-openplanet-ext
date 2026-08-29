@@ -276,7 +276,7 @@ export async function manageDefines(log?: Logger): Promise<void> {
         : `Manage Defines (${scopeLabel(scope)} overrides)`,
       placeHolder: resolved
         ? 'Checked = on. Unchecking writes -NAME; use Remove Define to delete an entry instead.'
-        : 'Overrides only — the language server is not running, so derived defines are not listed.',
+        : 'Overrides only — the server did not report the derived set (not running, or an older build).',
       matchOnDescription: true,
     },
   );

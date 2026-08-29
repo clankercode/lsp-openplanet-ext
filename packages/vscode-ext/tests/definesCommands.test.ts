@@ -604,7 +604,11 @@ describe('manageDefines with server introspection', () => {
     // The B034 complaint was a partial truth with no indication it was
     // partial. Degrading is fine; degrading silently is not.
     const placeholder = fakeVscode.recorded.quickPicks[1].options?.placeHolder ?? '';
-    expect(placeholder).toContain('not running');
+    // Accurate for BOTH degraded cases: no server at all, and a server older
+    // than B050 that answers MethodNotFound. `BINARY_REF` still pins v0.5.0,
+    // so the second is the case users hit first.
+    expect(placeholder).toContain('Overrides only');
+    expect(placeholder).toContain('older build');
   });
 
   it('survives a provider that rejects', async () => {
