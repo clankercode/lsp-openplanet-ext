@@ -17,6 +17,8 @@ export interface OpenplanetLspSettings {
   openplanetDir?: string;
   pluginsDir?: string;
   gameTarget?: string;
+  /** Openplanet signature level whose SIG_* defines are live (GH #64). */
+  signatureMode?: string;
   defines?: string[];
   /** Manual plugin-root override: dirs containing info.toml. When empty, the server auto-discovers. */
   pluginRoots?: string[];
@@ -42,6 +44,22 @@ export function isValidGameTarget(v: string): v is GameTarget {
 }
 
 /**
+ * Valid `signature_mode` values (server config.rs SignatureMode).
+ *
+ * Openplanet defines a signature macro when the current level is equal or
+ * BELOW that macro's level, so the levels are cumulative: `official` gives
+ * `SIG_OFFICIAL`, `developer` gives all four. `developer` is the server
+ * default and the set the LSP always used.
+ */
+export const SIGNATURE_MODES = ['developer', 'school', 'regular', 'official'] as const;
+
+export type SignatureMode = (typeof SIGNATURE_MODES)[number];
+
+export function isValidSignatureMode(v: string): v is SignatureMode {
+  return (SIGNATURE_MODES as readonly string[]).includes(v);
+}
+
+/**
  * Build the `initializationOptions` object to send at `initialize`.
  * Only includes keys with non-empty values (see precedence contract above).
  * Returns an empty object when nothing is set — sending `{}` is fine; the
@@ -62,6 +80,13 @@ export function buildInitializationOptions(
     // override a repo config that sets a different target.
     if (isValidGameTarget(settings.gameTarget)) {
       opts.game_target = settings.gameTarget;
+    }
+  }
+  if (settings.signatureMode && settings.signatureMode !== 'developer') {
+    // 'developer' is the server default (every SIG_* on) — forwarding it
+    // would needlessly override a repo config that narrows the level.
+    if (isValidSignatureMode(settings.signatureMode)) {
+      opts.signature_mode = settings.signatureMode;
     }
   }
   if (settings.defines && settings.defines.length > 0) {

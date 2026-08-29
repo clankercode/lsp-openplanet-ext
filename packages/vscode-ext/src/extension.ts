@@ -20,6 +20,7 @@ function readSettings(): OpenplanetLspSettings {
     openplanetDir: config.get<string>('openplanetDir', ''),
     pluginsDir: config.get<string>('pluginsDir', ''),
     gameTarget: config.get<string>('gameTarget', 'TMNEXT'),
+    signatureMode: config.get<string>('signatureMode', 'developer'),
     defines: config.get<string[]>('defines', []),
     pluginRoots: config.get<string[]>('pluginRoots', []),
   };

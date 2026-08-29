@@ -98,13 +98,30 @@
           ],
           "markdownDescription": "Which game the LSP compiles `#if` platform branches for (preprocessor defines). `TMNEXT` = Trackmania (2020). Leave at default to let a workspace `.openplanet-lsp.toml` decide. Changing this restarts the server."
         },
+        "openplanetLsp.signatureMode": {
+          "type": "string",
+          "default": "developer",
+          "enum": [
+            "developer",
+            "school",
+            "regular",
+            "official"
+          ],
+          "enumDescriptions": [
+            "All four signature defines (SIG_OFFICIAL, SIG_REGULAR, SIG_SCHOOL, SIG_DEVELOPER) — what an unsigned/dev-mode plugin compiles with. Server default.",
+            "SIG_OFFICIAL, SIG_REGULAR, SIG_SCHOOL.",
+            "SIG_OFFICIAL, SIG_REGULAR.",
+            "SIG_OFFICIAL only — the strictest level."
+          ],
+          "markdownDescription": "Which signature level's `SIG_*` defines are live. Openplanet defines a signature macro when the current level is equal or **below** that macro's level, so the levels are cumulative — set this to check your plugin the way it compiles once signed (`#if SIG_DEVELOPER` blocks go dead below `developer`). Forwarded to the server as `signature_mode`; left at `developer` nothing is sent, so a workspace `.openplanet-lsp.toml` keeps control. Changing this restarts the server."
+        },
         "openplanetLsp.defines": {
           "type": "array",
           "items": {
             "type": "string"
           },
           "default": [],
-          "markdownDescription": "Extra preprocessor defines (replaces the game-target defaults when non-empty). Forwarded to the server as `defines`."
+          "markdownDescription": "Extra preprocessor defines, **added** to the ones the game target and signature level derive and to `info.toml` `[script].defines` — listing `DEV` does not drop `TMNEXT`. Prefix an entry with `-` or `!` to turn a define off (`-LOGS`). Forwarded to the server as `defines`."
         },
         "openplanetLsp.pluginRoots": {
           "type": "array",
