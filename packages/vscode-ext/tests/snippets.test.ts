@@ -69,20 +69,47 @@ function bodyText(body: unknown): string {
 }
 
 /**
- * All tab stops in a body, in textual order, as numbers.
+ * All tab stops in a body, in textual order, plus malformed snippet markers.
  *
  * Handles the three VS Code forms: `$1`, `${1:placeholder}` and the choice
- * form `${1|a,b|}`. Nested placeholders are matched too because the scan is
- * per-occurrence rather than a structural parse.
+ * form `${1|a,b|}`. The scan must consume each complete token: a regex that
+ * merely recognizes `${1:` lets an unterminated placeholder silently pass the
+ * sequential-stop check.
  */
-function tabStops(body: string): number[] {
+function tabStops(body: string): { stops: number[]; malformed: string[] } {
   const stops: number[] = [];
-  const re = /\$(\d+)|\$\{(\d+)[:|}]/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(body)) !== null) {
-    stops.push(Number(m[1] ?? m[2]));
+  const malformed: string[] = [];
+  let cursor = 0;
+
+  while (cursor < body.length) {
+    const dollar = body.indexOf('$', cursor);
+    if (dollar === -1) break;
+
+    // A literal dollar must be escaped for the VS Code snippet parser. Count
+    // backslashes so `\\\\$` is a token while `\\$` is a literal dollar.
+    let backslashes = 0;
+    for (let i = dollar - 1; i >= 0 && body[i] === '\\'; i -= 1) backslashes += 1;
+    if (backslashes % 2 === 1) {
+      cursor = dollar + 1;
+      continue;
+    }
+
+    const rest = body.slice(dollar);
+    const match = /^\$(\d+)|^\$\{(\d+)(?::(?:\\.|[^\\}])*|\|(?:\\.|[^\\|])*\|)?\}/.exec(rest);
+    if (match === null) {
+      malformed.push(rest.slice(0, 40));
+      // An unclosed `${...` owns the rest of the body. Any `$0` inside it is
+      // placeholder text, not a real exit stop that can rescue the snippet.
+      if (rest.startsWith('${')) break;
+      cursor = dollar + 1;
+      continue;
+    }
+
+    stops.push(Number(match[1] ?? match[2]));
+    cursor = dollar + match[0].length;
   }
-  return stops;
+
+  return { stops, malformed };
 }
 
 describe('contributes.snippets wiring', () => {
@@ -144,6 +171,13 @@ describe('angelscript snippet file', () => {
     const bad = [...raw].filter((ch) => ch.charCodeAt(0) > 127);
     expect(bad, `non-ASCII characters: ${JSON.stringify(bad)}`).toEqual([]);
   });
+
+  it('only strips comments before the JSON root', () => {
+    const raw = '// header\n{\n  "description": "https://example.invalid//inside-json"\n}';
+    expect(JSON.parse(stripLeadingComments(raw))).toEqual({
+      description: 'https://example.invalid//inside-json',
+    });
+  });
 });
 
 function loadSnippets(): Record<string, SnippetEntry> {
@@ -190,7 +224,9 @@ describe('snippet entries', () => {
 
   it.each(names)('%s has well-formed, sequential tab stops', (name) => {
     const body = bodyText(snippets[name].body);
-    const stops = tabStops(body);
+    const { stops, malformed } = tabStops(body);
+
+    expect(malformed, `${name}: malformed snippet token(s)`).toEqual([]);
 
     // $0 is the exit stop: exactly one, and no snippet should leave the
     // cursor in an undefined place.
@@ -208,10 +244,20 @@ describe('snippet entries', () => {
     // $0 is the LAST stop in traversal order, so nothing numbered may follow
     // it textually — otherwise Tab exits the snippet before reaching them.
     const zeroAt = body.search(/\$0|\$\{0[:|}]/);
-    const afterZero = tabStops(body.slice(zeroAt + 1)).filter((n) => n > 0);
+    const afterZero = tabStops(body.slice(zeroAt + 1)).stops.filter((n) => n > 0);
     expect(afterZero, `${name}: numbered tab stops appear after $0`).toEqual([]);
+  });
 
-    // No stray `$` followed by a brace-less non-stop that VS Code would eat.
-    expect(body, `${name}: escape a literal $`).not.toMatch(/\$(?![0-9{])/);
+  it('rejects an unterminated braced placeholder', () => {
+    const parsed = tabStops('void Main() { ${1:unfinished $0 ');
+    expect(parsed.stops).toEqual([]);
+    expect(parsed.malformed).toEqual(['${1:unfinished $0 ']);
+  });
+
+  it('treats an escaped dollar as literal snippet text', () => {
+    expect(tabStops('const string price = "\\$5"; $0')).toEqual({
+      stops: [0],
+      malformed: [],
+    });
   });
 });

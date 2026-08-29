@@ -9,9 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- AngelScript snippets for Openplanet plugin boilerplate (B042): every
-  documented plugin callback (`Main`, `Update`, the four render passes,
-  `RenderMenu`/`RenderMenuMain`, the `OnEnabled`/`OnDisabled`/`OnDestroyed`/
+- AngelScript snippets for Openplanet plugin boilerplate (B042): the documented
+  callbacks useful for plugin boilerplate (`Main`, `Update`, `Render`,
+  `RenderEarly`, `RenderInterface`, `RenderMenu`, `RenderMenuMain`, the
+  `OnEnabled`/`OnDisabled`/`OnDestroyed`/
   `OnSettingsChanged` lifecycle hooks, and the keyboard/mouse callbacks in both
   their `void` and `UI::InputBlocking` forms), the `[Setting ...]` attribute
   shapes (plain, `name`, `description`, `category`, `min`/`max`, `drag`,

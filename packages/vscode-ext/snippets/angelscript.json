@@ -12,10 +12,8 @@
 // Prefixes are all namespaced `op*` on purpose: a bare `main` or `render`
 // prefix would fire while the user is typing an ordinary identifier.
 //
-// Meta::PluginCoroutine is deliberately absent. `startnew` now returns
-// `awaitable@` (the docs list every overload with that return type) and
-// Meta::PluginCoroutine is not in the Openplanet type DB the LSP loads, so a
-// snippet for it would emit code our own checker flags as an unknown type.
+// The coroutine snippet uses the documented `awaitable@` result from
+// `startnew`; no legacy Meta::PluginCoroutine form is emitted.
 {
   "Openplanet: Main entry point": {
     "prefix": "opmain",
