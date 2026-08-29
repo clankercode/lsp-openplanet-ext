@@ -11,6 +11,7 @@ import {
   parseDefineEntries,
   parseDefineEntry,
   planClearOverrides,
+  platformSelectorCaution,
   removeDefineEntries,
   validateDefineEntry,
   type ResolvedDefine,
@@ -471,5 +472,81 @@ describe('planClearOverrides', () => {
     expect(planClearOverrides({ globalValue: ['USER'] }, 'workspace')).toEqual({
       action: 'empty',
     });
+  });
+});
+
+describe('platformSelectorCaution', () => {
+  it('warns about a selector from another game generation', () => {
+    // GH #36 / B024: `apply_define_overrides` treats a platform selector that
+    // is foreign to `game_target` as authoritative and REMOVES every selector
+    // the user did not list — including the target's own.
+    const caution = platformSelectorCaution('MP4', 'TMNEXT');
+    expect(caution).toBeDefined();
+    expect(caution).toContain('MP4');
+    expect(caution).toContain('TMNEXT');
+  });
+
+  it.each([
+    ['MP40', 'MP4'],
+    ['MP4', 'MP41'],
+    ['MP41', 'MP40'],
+    ['MP4', 'MP4'],
+    ['UNITED', 'UNITED_FOREVER'],
+    ['UNITED_FOREVER', 'UNITED'],
+    ['TMNEXT', 'TMNEXT'],
+  ])('stays silent for %s within the %s family', (name, gameTarget) => {
+    // Same family is NOT foreign server-side, so warning here would be a false
+    // alarm on a perfectly ordinary edit.
+    expect(platformSelectorCaution(name, gameTarget)).toBeUndefined();
+  });
+
+  it.each(['DEV', 'LOGS', 'DEPENDENCY_DIPS', 'SIG_DEVELOPER', 'MY_FLAG'])(
+    'stays silent for %s, which is not a platform selector at all',
+    (name) => {
+      expect(platformSelectorCaution(name, 'TMNEXT')).toBeUndefined();
+    },
+  );
+
+  it('stays silent when the game target is unknown to the extension', () => {
+    // Nothing to compare against; a guess would be worse than silence.
+    expect(platformSelectorCaution('MP4', undefined)).toBeUndefined();
+    expect(platformSelectorCaution('MP4', '')).toBeUndefined();
+  });
+
+  it('warns for any selector when the configured target is not a known one', () => {
+    // The server does `platform_family_for_target(...).unwrap_or(&[])`, so with
+    // an unrecognised target EVERY listed selector is foreign.
+    expect(platformSelectorCaution('MP4', 'NOT_A_GAME')).toBeDefined();
+  });
+});
+
+describe('validateDefineEntry with a game target', () => {
+  it('warns, without blocking, about adding a foreign platform selector', () => {
+    const issue = validateDefineEntry('MP4', 'TMNEXT');
+    expect(issue?.severity).toBe('warning');
+    expect(issue?.message).toContain('TMNEXT');
+  });
+
+  it.each(['-MP4', '!MP4'])('does not warn about %s, which REMOVES a selector', (raw) => {
+    // The server builds `foreign` from the ADDS bucket only, so a removal
+    // never triggers the replacement. Warning here would be plain wrong.
+    expect(validateDefineEntry(raw, 'TMNEXT')).toBeUndefined();
+  });
+
+  it('does not warn about a same-family selector', () => {
+    expect(validateDefineEntry('MP40', 'MP4')).toBeUndefined();
+  });
+
+  it('does not warn about an ordinary define', () => {
+    expect(validateDefineEntry('MY_FLAG', 'TMNEXT')).toBeUndefined();
+  });
+
+  it('still reports the identifier problem first', () => {
+    const issue = validateDefineEntry('MY DEFINE', 'TMNEXT');
+    expect(issue?.message).toContain('MY_DEFINE');
+  });
+
+  it('behaves exactly as before when no game target is supplied', () => {
+    expect(validateDefineEntry('MP4')).toBeUndefined();
   });
 });

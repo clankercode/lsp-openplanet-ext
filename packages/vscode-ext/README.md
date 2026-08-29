@@ -105,6 +105,11 @@ All under the **Openplanet LSP** category in the command palette:
   means on; unchecking one writes the `-NAME` entry that turns it off. The whole
   checklist is saved in one write, so a session of toggling restarts the server once.
 - **Add Define** — type a name to add. Prefix it with `-` to add an off entry instead.
+  Adding a platform selector for a different game than your `gameTarget` (`MP4`
+  while the target is `TMNEXT`) is flagged, because the server treats it as
+  authoritative and drops the target's own selectors — every `#if TMNEXT` branch
+  would go dead. The warning does not block you; same-generation names like
+  `MP40` under `MP4` are not flagged at all.
 - **Remove Define** — delete entries from the array. This is different from turning a
   define off: removing an entry means "no opinion", so whatever the game target,
   signature level and `info.toml` derive applies again.

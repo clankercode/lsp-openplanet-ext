@@ -38,6 +38,7 @@ import {
   parseDefineEntries,
   parseDefineEntry,
   planClearOverrides,
+  platformSelectorCaution,
   removeDefineEntries,
   validateDefineEntry,
   type DefineEdit,
@@ -75,6 +76,15 @@ function inspectDefines(): InspectedDefines {
     globalValue: inspected?.globalValue,
     workspaceValue: inspected?.workspaceValue,
   };
+}
+
+/**
+ * The configured game target, for the platform-selector guard. Read the same
+ * way `readSettings()` does, so the guard judges against the value actually
+ * forwarded to the server.
+ */
+function gameTarget(): string {
+  return config().get<string>('gameTarget', 'TMNEXT');
 }
 
 function hasWorkspace(): boolean {
@@ -142,11 +152,15 @@ async function writeDefines(
 }
 
 /** `NAME  •  on (user setting)` — the state and origin, greyed, per row. */
-function rowItem(row: DefineRow): RowItem {
+function rowItem(row: DefineRow, target: string): RowItem {
   const state = row.active ? 'on' : 'off';
-  const detail = row.entry
+  const base = row.entry
     ? `${state} — settings entry \`${row.entry}\``
     : `${state} — no entry in openplanetLsp.defines`;
+  // Same GH #36 hazard as Add Define: a row for a foreign platform selector
+  // turns off the target's own selectors while it is checked.
+  const caution = platformSelectorCaution(row.name, target);
+  const detail = caution ? `${base} · ⚠ ${caution}` : base;
   return {
     label: row.name,
     description: `${state} · ${describeOrigin(row.origin)}`,
@@ -181,13 +195,17 @@ export async function manageDefines(log?: Logger): Promise<void> {
     return;
   }
 
-  const picked = await vscode.window.showQuickPick(rows.map(rowItem), {
-    canPickMany: true,
-    title: `Manage Defines (${scopeLabel(scope)} overrides)`,
-    placeHolder:
-      'Checked = on. Unchecking writes -NAME; use Remove Define to delete an entry instead.',
-    matchOnDescription: true,
-  });
+  const target = gameTarget();
+  const picked = await vscode.window.showQuickPick(
+    rows.map((row) => rowItem(row, target)),
+    {
+      canPickMany: true,
+      title: `Manage Defines (${scopeLabel(scope)} overrides)`,
+      placeHolder:
+        'Checked = on. Unchecking writes -NAME; use Remove Define to delete an entry instead.',
+      matchOnDescription: true,
+    },
+  );
   if (!picked) return;
 
   const wantedOn = new Set(picked.map((item) => item.row.name));
@@ -214,7 +232,7 @@ export async function addDefine(log?: Logger, presetScope?: DefinesScope): Promi
     placeHolder: 'MY_FLAG',
     ignoreFocusOut: true,
     validateInput: (value) => {
-      const issue = validateDefineEntry(value);
+      const issue = validateDefineEntry(value, gameTarget());
       if (!issue) return undefined;
       return {
         message: issue.message,

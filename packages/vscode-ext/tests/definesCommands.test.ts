@@ -148,6 +148,19 @@ describe('manageDefines', () => {
     expect(rows[0].description).toContain('user setting');
   });
 
+  it('flags a foreign platform selector row', async () => {
+    fakeVscode.__setConfig({ 'openplanetLsp.gameTarget': 'TMNEXT' });
+    fakeVscode.__setConfigScopes({ [KEY]: { workspaceValue: ['MP4', 'DEV'] } });
+    queueScope('Workspace');
+    queuePicks(() => true);
+    await manageDefines();
+    const rows = fakeVscode.recorded.quickPicks[1].items as PickItem[];
+    const mp4 = rows.find((r) => r.label === 'MP4');
+    const dev = rows.find((r) => r.label === 'DEV');
+    expect(mp4?.detail).toContain('TMNEXT');
+    expect(dev?.detail).not.toContain('TMNEXT');
+  });
+
   it('writes ONCE for a whole batch, not once per toggled row', async () => {
     fakeVscode.__setConfigScopes({ [KEY]: { workspaceValue: ['A', 'B', 'C'] } });
     queueScope('Workspace');
@@ -282,6 +295,44 @@ describe('addDefine', () => {
       await addDefine();
       expect(updates(), entry).toHaveLength(0);
     }
+  });
+
+  it('warns about a foreign platform selector without blocking the write', async () => {
+    fakeVscode.__setConfig({ 'openplanetLsp.gameTarget': 'TMNEXT' });
+    fakeVscode.__queueInputBox(() => 'MP4');
+    queueScope('Workspace');
+    await addDefine();
+
+    const validate = fakeVscode.recorded.inputBoxes[0]?.validateInput;
+    const issue = validate!('MP4');
+    expect((issue as { severity: number }).severity).toBe(
+      fakeVscode.InputBoxValidationSeverity.Warning,
+    );
+    expect((issue as { message: string }).message).toContain('TMNEXT');
+    // Non-blocking: this is a footgun guard, not validation. The entry lands.
+    expect(lastWrite()).toEqual(['MP4']);
+  });
+
+  it('does not warn about a selector in the configured target family', async () => {
+    fakeVscode.__setConfig({ 'openplanetLsp.gameTarget': 'MP4' });
+    fakeVscode.__queueInputBox(() => 'MP40');
+    queueScope('Workspace');
+    await addDefine();
+    expect(fakeVscode.recorded.inputBoxes[0]?.validateInput!('MP40')).toBeUndefined();
+    expect(lastWrite()).toEqual(['MP40']);
+  });
+
+  it('reads the game target from settings rather than assuming TMNEXT', async () => {
+    fakeVscode.__setConfig({ 'openplanetLsp.gameTarget': 'MP4' });
+    fakeVscode.__queueInputBox(() => 'TMNEXT');
+    queueScope('Workspace');
+    await addDefine();
+    // TMNEXT is foreign once the target is MP4 — the guard must follow the
+    // setting, not a hardcoded default.
+    const issue = fakeVscode.recorded.inputBoxes[0]?.validateInput!('TMNEXT');
+    expect((issue as { severity: number }).severity).toBe(
+      fakeVscode.InputBoxValidationSeverity.Warning,
+    );
   });
 
   it('writes nothing when the input box is dismissed', async () => {

@@ -28,7 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   points at Openplanet's own `_` mapping. **Known limit:** the checklist lists
   your own override entries only. Showing the full resolved set with each
   define's origin needs a server request that does not exist yet; the pure module
-  already accepts such a set and produces minimal writes from it.
+  already accepts such a set and produces minimal writes from it. **Add Define**
+  and the manage checklist also guard the GH #36 footgun the palette newly puts
+  one keystroke away: adding a platform selector foreign to your `gameTarget`
+  (`MP4` while the target is `TMNEXT`) makes the server drop the target's own
+  selectors, killing every `#if TMNEXT` branch, and it only says so on stderr.
+  The warning is non-blocking and same-family names (`MP40` under `MP4`) are
+  silent.
 
 - Status bar indicator and diagnostic commands (B043): the status bar shows
   whether the server is starting, ready, restarting or failed (the failed state

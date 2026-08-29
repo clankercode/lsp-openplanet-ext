@@ -38,6 +38,8 @@
  * answer to {@link buildDefineRows} is the whole integration.
  */
 
+import { isPlatformSelector, platformFamilyFor } from './settings';
+
 /** Prefixes the server accepts to turn a define OFF. */
 export const NEGATION_PREFIXES = ['-', '!'] as const;
 
@@ -228,6 +230,49 @@ export function removeDefineEntries(entries: readonly string[], raws: readonly s
 }
 
 /**
+ * Caution for adding a platform selector from another game generation.
+ *
+ * GH #36 / B024: `apply_define_overrides` does not merely ADD a platform
+ * selector. If a plain entry is a selector foreign to `game_target`, the
+ * listed one wins outright and the server REMOVES every selector the user did
+ * not list — the target's own included. So `defines = ["MP4"]` under
+ * `game_target = TMNEXT` kills every `#if TMNEXT` branch in the plugin. The
+ * server warns about this on stderr, which nobody driving the command palette
+ * will ever see, and this UI is what makes it one keystroke away.
+ *
+ * Only an ADD can trigger it — the server builds its `foreign` list from the
+ * adds bucket — so callers must not consult this for a `-NAME` entry.
+ *
+ * Same family is not foreign (`MP40` under `MP4` is ordinary), which is why
+ * this needs `PLATFORM_FAMILIES` and not a flat membership test. An
+ * unrecognised `gameTarget` warns for every selector, matching the server's
+ * `platform_family_for_target(...).unwrap_or(&[])`.
+ *
+ * Returns `undefined` when there is no target to compare against: a guess
+ * would be worse than silence.
+ *
+ * CAVEAT: `gameTarget` here is the VS Code setting. Left at its `TMNEXT`
+ * default nothing is forwarded (see `buildInitializationOptions`), so a
+ * workspace `.openplanet-lsp.toml` may set a different effective target and
+ * this warning can be wrong. It is non-blocking, so that costs a spurious
+ * line of prose, never a blocked edit.
+ */
+export function platformSelectorCaution(
+  name: string,
+  gameTarget: string | undefined,
+): string | undefined {
+  if (!gameTarget) return undefined;
+  if (!isPlatformSelector(name)) return undefined;
+  if (platformFamilyFor(gameTarget)?.includes(name)) return undefined;
+  return (
+    `\`${name}\` is a platform selector for another game. Adding it REPLACES the ` +
+    `platform selectors your game target (\`${gameTarget}\`) derives, so every ` +
+    `\`#if ${gameTarget}\` branch goes dead. Set openplanetLsp.gameTarget instead ` +
+    'to pick a game.'
+  );
+}
+
+/**
  * Check a name the user typed.
  *
  * Errors are reserved for entries the SERVER itself drops — writing one would
@@ -238,7 +283,7 @@ export function removeDefineEntries(entries: readonly string[], raws: readonly s
  * so refusing an odd name would make this UI weaker than raw JSON — while
  * saying nothing would let a typo look like it worked.
  */
-export function validateDefineEntry(raw: string): DefineNameIssue | undefined {
+export function validateDefineEntry(raw: string, gameTarget?: string): DefineNameIssue | undefined {
   const parsed = parseDefineEntry(raw);
   if (!parsed) {
     return {
@@ -246,8 +291,13 @@ export function validateDefineEntry(raw: string): DefineNameIssue | undefined {
       message: 'Enter a define name, optionally prefixed with `-` or `!` to turn it off.',
     };
   }
-  const { name } = parsed;
-  if (IDENTIFIER.test(name)) return undefined;
+  const { name, on } = parsed;
+  if (IDENTIFIER.test(name)) {
+    // Only an add can trip the platform-selector replacement, so a `-NAME`
+    // removal is silent here.
+    const caution = on ? platformSelectorCaution(name, gameTarget) : undefined;
+    return caution ? { severity: 'warning', message: caution } : undefined;
+  }
 
   const mapped = name.replace(OPENPLANET_MAPPED, '_');
   const suggestion =
