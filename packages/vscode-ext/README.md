@@ -18,16 +18,16 @@ channel (_Output → Openplanet LSP_) shows exactly what was tried.
 
 ## Settings
 
-| Setting                       | Default       | Description                                        |
-| ----------------------------- | ------------- | -------------------------------------------------- |
-| `openplanetLsp.serverPath`    | `""`          | Absolute path to the binary override.              |
-| `openplanetLsp.openplanetDir` | `""`          | Openplanet install dir (auto-detected when empty). |
-| `openplanetLsp.pluginsDir`    | `""`          | Plugins dir (auto-detected when empty).            |
-| `openplanetLsp.gameTarget`    | `"TMNEXT"`    | Which game's `#if` platform branches are compiled. |
-| `openplanetLsp.signatureMode` | `"developer"` | Signature level whose `SIG_*` defines are live.    |
-| `openplanetLsp.defines`       | `[]`          | Extra preprocessor defines (added, not replaced).  |
-| `openplanetLsp.unused`        | `""`          | How unused declarations are reported.              |
-| `openplanetLsp.inactiveRegions` | `""`        | Grey out `#if` branches your defines switch off.   |
+| Setting                         | Default       | Description                                        |
+| ------------------------------- | ------------- | -------------------------------------------------- |
+| `openplanetLsp.serverPath`      | `""`          | Absolute path to the binary override.              |
+| `openplanetLsp.openplanetDir`   | `""`          | Openplanet install dir (auto-detected when empty). |
+| `openplanetLsp.pluginsDir`      | `""`          | Plugins dir (auto-detected when empty).            |
+| `openplanetLsp.gameTarget`      | `"TMNEXT"`    | Which game's `#if` platform branches are compiled. |
+| `openplanetLsp.signatureMode`   | `"developer"` | Signature level whose `SIG_*` defines are live.    |
+| `openplanetLsp.defines`         | `[]`          | Extra preprocessor defines (added, not replaced).  |
+| `openplanetLsp.unused`          | `""`          | How unused declarations are reported.              |
+| `openplanetLsp.inactiveRegions` | `""`          | Grey out `#if` branches your defines switch off.   |
 
 **Precedence:** the server layers configuration as auto-detect → workspace
 `.openplanet-lsp.toml` → user config → VS Code settings. The extension only forwards
@@ -64,9 +64,51 @@ an IDE fades `#if 0` in C — so you can see at a glance which code your `gameTa
 warning/error level, and `openplanet-lsp check` never reports these at all — a branch
 that is off for your target is dead by design, not a defect.
 
+## Snippets
+
+Typing `op` in a `.as` file offers the Openplanet boilerplate you would otherwise copy
+from another plugin:
+
+- **Callbacks** — `opmain`, `opupdate`, `oprender`, `oprenderearly`,
+  `oprenderinterface`, `oprendermenu`, `oprendermenumain`, `oponenabled`,
+  `opondisabled`, `opondestroyed`, `oponsettingschanged`, `oponkeypress`,
+  `oponmousebutton`, `oponmousemove`, `oponmousewheel`. The three input callbacks also
+  have `...blocking` variants that return `UI::InputBlocking` so you can swallow the
+  input from the game.
+- **Settings** — `opsetting` (plain) plus `opsettingname`, `opsettingdescription`,
+  `opsettingcategory`, `opsettingrange` (slider), `opsettingdrag`, `opsettingcolor`,
+  `opsettinghidden`, and `opsettingstab` for a `[SettingsTab]` you draw yourself.
+- **Coroutines** — `opstartnew`, `opcoroutine`, `opyieldloop`, `opyielduntil`.
+
+Every prefix starts with `op` on purpose: a bare `main` or `render` prefix would fire
+while you are typing an ordinary identifier. Callback signatures come from the
+[Openplanet callback reference](https://openplanet.dev/docs/reference/plugin-callbacks),
+cited in the snippet file itself.
+
 ## Commands
 
-- **Openplanet LSP: Restart Server** — restart the language server.
+All under the **Openplanet LSP** category in the command palette:
+
+- **Restart Server** — restart the language server.
+- **Restart Server with Verbose Logging** — same, but with `RUST_LOG=debug` in
+  the server's environment. Use it to reproduce a problem for a bug report without
+  editing any settings; a plain restart turns it back off.
+- **Show Logs** — reveal the _Openplanet LSP_ output channel.
+- **Show Status** — open a read-only document with the resolved server path and
+  version, the type DB versions, your effective settings, and your workspace roots.
+  Home directories are shown as `~`, and no environment variables are included, so
+  it is safe to paste straight into an issue.
+
+## Status bar
+
+An indicator on the right shows whether the server is starting, ready, restarting,
+or failed — the failed state is coloured with the editor's error background. Hover
+it for the resolved binary, its version, the type DB versions and where they came
+from, the active game target, and the workspace root of the file you are looking at
+(which follows the active editor in a multi-root workspace). Click it to open the log.
+
+The indicator is driven by the language client's own state events and two one-shot
+probes taken when a server starts. It never polls.
 
 ## Untrusted workspaces
 

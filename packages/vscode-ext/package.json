@@ -31,7 +31,14 @@
       "description": "The language server analyzes workspace files and openplanetLsp.serverPath executes a configured binary. File contents are sent to the server process."
     }
   },
-  "activationEvents": [],
+  "activationEvents": [
+    "onLanguage:angelscript",
+    "workspaceContains:**/info.toml",
+    "onCommand:openplanetLsp.restart",
+    "onCommand:openplanetLsp.restartVerbose",
+    "onCommand:openplanetLsp.showLogs",
+    "onCommand:openplanetLsp.showStatus"
+  ],
   "contributes": {
     "languages": [
       {
@@ -57,10 +64,31 @@
         "path": "./syntaxes/angelscript.tmLanguage.json"
       }
     ],
+    "snippets": [
+      {
+        "language": "angelscript",
+        "path": "./snippets/angelscript.json"
+      }
+    ],
     "commands": [
       {
         "command": "openplanetLsp.restart",
         "title": "Restart Server",
+        "category": "Openplanet LSP"
+      },
+      {
+        "command": "openplanetLsp.restartVerbose",
+        "title": "Restart Server with Verbose Logging",
+        "category": "Openplanet LSP"
+      },
+      {
+        "command": "openplanetLsp.showLogs",
+        "title": "Show Logs",
+        "category": "Openplanet LSP"
+      },
+      {
+        "command": "openplanetLsp.showStatus",
+        "title": "Show Status",
         "category": "Openplanet LSP"
       }
     ],
@@ -70,7 +98,7 @@
         "openplanetLsp.serverPath": {
           "type": "string",
           "default": "",
-          "description": "Absolute path to the openplanet-lsp binary. Leave empty to use the bundled binary (when available) or the first `openplanet-lsp` on PATH."
+          "description": "Absolute path to the openplanet-lsp binary. Leave empty to use the bundled binary (when available) or the first `openplanet-lsp` on PATH. When set, this exact path is used; an invalid path fails visibly instead of falling back."
         },
         "openplanetLsp.openplanetDir": {
           "type": "string",

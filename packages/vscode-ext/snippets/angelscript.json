@@ -1,0 +1,238 @@
+// Openplanet plugin snippets for AngelScript (.as).
+//
+// Every callback signature below was copied from the official Openplanet
+// documentation on 2026-08-30 -- not from memory. A snippet with a wrong
+// parameter list still compiles and simply never fires, so these are worth
+// re-checking against the docs whenever they change:
+//
+//   callbacks  https://openplanet.dev/docs/reference/plugin-callbacks
+//   settings   https://openplanet.dev/docs/reference/settings
+//   startnew   https://openplanet.dev/docs/api/global/startnew
+//
+// Prefixes are all namespaced `op*` on purpose: a bare `main` or `render`
+// prefix would fire while the user is typing an ordinary identifier.
+//
+// Meta::PluginCoroutine is deliberately absent, though the ticket asked for
+// it. `startnew` is documented as returning `awaitable@` for every overload,
+// and Meta::PluginCoroutine is in neither Openplanet type DB the LSP loads --
+// `openplanet-lsp check` on a `Meta::PluginCoroutine@` declaration reports
+// `error: unknown type` (measured 2026-08-30), while the `awaitable@` form
+// checks clean. A snippet for it would hand the user a red squiggle.
+{
+  "Openplanet: Main entry point": {
+    "prefix": "opmain",
+    "body": ["void Main()", "{", "\t$0", "}"],
+    "description": "void Main() - plugin entry point, run once on load. Yieldable."
+  },
+  "Openplanet: Update callback": {
+    "prefix": "opupdate",
+    "body": ["void Update(float dt)", "{", "\t$0", "}"],
+    "description": "void Update(float dt) - called every frame with the frame delta in milliseconds."
+  },
+  "Openplanet: Render callback": {
+    "prefix": "oprender",
+    "body": ["void Render()", "{", "\t$0", "}"],
+    "description": "void Render() - called every frame for drawing (nvg and UI)."
+  },
+  "Openplanet: RenderEarly callback": {
+    "prefix": "oprenderearly",
+    "body": ["void RenderEarly()", "{", "\t$0", "}"],
+    "description": "void RenderEarly() - render pass that runs before Render(), for drawing underneath other plugins."
+  },
+  "Openplanet: RenderInterface callback": {
+    "prefix": "oprenderinterface",
+    "body": ["void RenderInterface()", "{", "\t$0", "}"],
+    "description": "void RenderInterface() - render pass intended for interface windows."
+  },
+  "Openplanet: RenderMenu callback": {
+    "prefix": "oprendermenu",
+    "body": ["void RenderMenu()", "{", "\t$0", "}"],
+    "description": "void RenderMenu() - contribute entries to the plugin's menu in the Openplanet overlay."
+  },
+  "Openplanet: RenderMenuMain callback": {
+    "prefix": "oprendermenumain",
+    "body": ["void RenderMenuMain()", "{", "\t$0", "}"],
+    "description": "void RenderMenuMain() - contribute entries to the main Openplanet menu bar."
+  },
+  "Openplanet: OnEnabled callback": {
+    "prefix": "oponenabled",
+    "body": ["void OnEnabled()", "{", "\t$0", "}"],
+    "description": "void OnEnabled() - called when the plugin is enabled."
+  },
+  "Openplanet: OnDisabled callback": {
+    "prefix": "opondisabled",
+    "body": ["void OnDisabled()", "{", "\t$0", "}"],
+    "description": "void OnDisabled() - called when the plugin is disabled."
+  },
+  "Openplanet: OnDestroyed callback": {
+    "prefix": "opondestroyed",
+    "body": ["void OnDestroyed()", "{", "\t$0", "}"],
+    "description": "void OnDestroyed() - called when the plugin is unloaded; release resources here."
+  },
+  "Openplanet: OnSettingsChanged callback": {
+    "prefix": "oponsettingschanged",
+    "body": ["void OnSettingsChanged()", "{", "\t$0", "}"],
+    "description": "void OnSettingsChanged() - called after any [Setting] value changes."
+  },
+  "Openplanet: OnKeyPress callback": {
+    "prefix": "oponkeypress",
+    "body": ["void OnKeyPress(bool down, VirtualKey key)", "{", "\t$0", "}"],
+    "description": "void OnKeyPress(bool down, VirtualKey key) - keyboard callback. Use oponkeypressblocking to swallow the key."
+  },
+  "Openplanet: OnKeyPress callback (input-blocking)": {
+    "prefix": "oponkeypressblocking",
+    "body": [
+      "UI::InputBlocking OnKeyPress(bool down, VirtualKey key)",
+      "{",
+      "\tif (down && key == VirtualKey::${1:F3}) {",
+      "\t\t$0",
+      "\t\treturn UI::InputBlocking::Block;",
+      "\t}",
+      "\treturn UI::InputBlocking::DoNothing;",
+      "}"
+    ],
+    "description": "UI::InputBlocking OnKeyPress(bool down, VirtualKey key) - keyboard callback that can swallow the key from the game."
+  },
+  "Openplanet: OnMouseButton callback": {
+    "prefix": "oponmousebutton",
+    "body": ["void OnMouseButton(bool down, int button, int x, int y)", "{", "\t$0", "}"],
+    "description": "void OnMouseButton(bool down, int button, int x, int y) - mouse button callback; x/y are viewport coordinates."
+  },
+  "Openplanet: OnMouseButton callback (input-blocking)": {
+    "prefix": "oponmousebuttonblocking",
+    "body": [
+      "UI::InputBlocking OnMouseButton(bool down, int button, int x, int y)",
+      "{",
+      "\t$0",
+      "\treturn UI::InputBlocking::DoNothing;",
+      "}"
+    ],
+    "description": "UI::InputBlocking OnMouseButton(bool down, int button, int x, int y) - mouse button callback that can swallow the click."
+  },
+  "Openplanet: OnMouseMove callback": {
+    "prefix": "oponmousemove",
+    "body": ["void OnMouseMove(int x, int y)", "{", "\t$0", "}"],
+    "description": "void OnMouseMove(int x, int y) - mouse move callback; x/y are viewport coordinates."
+  },
+  "Openplanet: OnMouseWheel callback": {
+    "prefix": "oponmousewheel",
+    "body": ["void OnMouseWheel(int x, int y)", "{", "\t$0", "}"],
+    "description": "void OnMouseWheel(int x, int y) - mouse wheel callback; x/y are the scroll deltas."
+  },
+  "Openplanet: OnMouseWheel callback (input-blocking)": {
+    "prefix": "oponmousewheelblocking",
+    "body": [
+      "UI::InputBlocking OnMouseWheel(int x, int y)",
+      "{",
+      "\t$0",
+      "\treturn UI::InputBlocking::DoNothing;",
+      "}"
+    ],
+    "description": "UI::InputBlocking OnMouseWheel(int x, int y) - mouse wheel callback that can swallow the scroll."
+  },
+
+  "Openplanet: Setting (plain)": {
+    "prefix": "opsetting",
+    "body": ["[Setting]", "${1:bool} ${2:S_EnableThing} = ${3:true};", "$0"],
+    "description": "[Setting] with no attributes - the variable name is used as the display name."
+  },
+  "Openplanet: Setting with name": {
+    "prefix": "opsettingname",
+    "body": [
+      "[Setting name=\"${1:Enable thing}\"]",
+      "${2:bool} ${3:S_EnableThing} = ${4:true};",
+      "$0"
+    ],
+    "description": "[Setting name=\"...\"] - display name shown in the settings dialog."
+  },
+  "Openplanet: Setting with description": {
+    "prefix": "opsettingdescription",
+    "body": [
+      "[Setting name=\"${1:Enable thing}\" description=\"${2:What this setting does.}\"]",
+      "${3:bool} ${4:S_EnableThing} = ${5:true};",
+      "$0"
+    ],
+    "description": "[Setting name=\"...\" description=\"...\"] - description becomes the tooltip on the question-mark icon."
+  },
+  "Openplanet: Setting with category": {
+    "prefix": "opsettingcategory",
+    "body": [
+      "[Setting category=\"${1:General}\" name=\"${2:Enable thing}\"]",
+      "${3:bool} ${4:S_EnableThing} = ${5:true};",
+      "$0"
+    ],
+    "description": "[Setting category=\"...\" name=\"...\"] - each category becomes its own tab in the settings dialog."
+  },
+  "Openplanet: Setting slider (min/max)": {
+    "prefix": "opsettingrange",
+    "body": [
+      "[Setting category=\"${1:General}\" name=\"${2:Amount}\" min=${3:0} max=${4:100}]",
+      "${5:int} ${6:S_Amount} = ${7:10};",
+      "$0"
+    ],
+    "description": "[Setting ... min= max=] - numeric setting rendered as a slider. min/max values are unquoted."
+  },
+  "Openplanet: Setting drag (min/max)": {
+    "prefix": "opsettingdrag",
+    "body": [
+      "[Setting category=\"${1:General}\" name=\"${2:Font size}\" drag min=${3:0} max=${4:100}]",
+      "${5:float} ${6:S_FontSize} = ${7:16.0};",
+      "$0"
+    ],
+    "description": "[Setting ... drag min= max=] - numeric setting the user drags instead of typing."
+  },
+  "Openplanet: Setting color": {
+    "prefix": "opsettingcolor",
+    "body": [
+      "[Setting category=\"${1:General}\" name=\"${2:Text color}\" color]",
+      "vec4 ${3:S_TextColor} = vec4(${4:1, 1, 1, 1});",
+      "$0"
+    ],
+    "description": "[Setting ... color] - vec3/vec4 setting rendered with a color picker."
+  },
+  "Openplanet: Setting hidden": {
+    "prefix": "opsettinghidden",
+    "body": ["[Setting hidden]", "${1:bool} ${2:S_HasSeenIntro} = ${3:false};", "$0"],
+    "description": "[Setting hidden] - persisted but never shown in the settings dialog."
+  },
+  "Openplanet: SettingsTab render function": {
+    "prefix": "opsettingstab",
+    "body": [
+      "[SettingsTab name=\"${1:Widgets}\" icon=\"${2:Cogs}\"]",
+      "void ${3:RenderSettingsTab}()",
+      "{",
+      "\t$0",
+      "}"
+    ],
+    "description": "[SettingsTab name=\"...\" icon=\"...\"] - a custom settings tab you draw yourself with UI:: calls."
+  },
+
+  "Openplanet: start a coroutine": {
+    "prefix": "opstartnew",
+    "body": ["awaitable@ ${1:coro} = startnew(${2:CoroutineFunction});", "$0"],
+    "description": "startnew(...) returns awaitable@ - starts a yieldable coroutine from a void Func()."
+  },
+  "Openplanet: coroutine function": {
+    "prefix": "opcoroutine",
+    "body": [
+      "void ${1:MyCoroutine}()",
+      "{",
+      "\twhile (true) {",
+      "\t\t$0",
+      "\t\tyield();",
+      "\t}",
+      "}"
+    ],
+    "description": "A long-running coroutine: while (true) { ... yield(); }. Start it with startnew()."
+  },
+  "Openplanet: yield loop": {
+    "prefix": "opyieldloop",
+    "body": ["while (true) {", "\t$0", "\tyield();", "}"],
+    "description": "while (true) { ... yield(); } - yields one frame per iteration. Use sleep(ms) to wait a wall-clock duration instead."
+  },
+  "Openplanet: wait until a condition": {
+    "prefix": "opyielduntil",
+    "body": ["while (!(${1:condition})) {", "\tyield();", "}", "$0"],
+    "description": "Yield frames until a condition holds. Only valid inside Main() or a coroutine."
+  }
+}
