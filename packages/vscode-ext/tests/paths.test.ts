@@ -123,6 +123,23 @@ describe('abbreviateHomeInText', () => {
     ).toBe('failed to open /home/maxwell (EACCES)');
   });
 
+  it('does not redact hyphenated sibling paths on POSIX or Windows', () => {
+    expect(
+      abbreviateHomeInText(
+        'failed to open /home/max-backup (EACCES); retry /home/max/bin/openplanet-lsp',
+        ['/home/max'],
+        'linux',
+      ),
+    ).toBe('failed to open /home/max-backup (EACCES); retry ~/bin/openplanet-lsp');
+    expect(
+      abbreviateHomeInText(
+        'failed to open C:\\Users\\Max-backup: access denied; retry C:\\Users\\Max\\bin\\openplanet-lsp.exe',
+        ['C:\\Users\\Max'],
+        'win32',
+      ),
+    ).toBe('failed to open C:\\Users\\Max-backup: access denied; retry ~\\bin\\openplanet-lsp.exe');
+  });
+
   it('redacts a canonical home alias when HOME itself is a symlink', () => {
     expect(
       abbreviateHomeInText(

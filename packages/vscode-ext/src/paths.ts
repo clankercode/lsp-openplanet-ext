@@ -54,13 +54,25 @@ export function abbreviateHome(
   return p;
 }
 
-/** True for a character that can continue a filesystem path. */
-function isPathCharacter(ch: string): boolean {
-  return /[A-Za-z0-9_.~\\/\\:-]/.test(ch);
-}
-
 function isSeparator(ch: string, platform: string): boolean {
   return ch === '/' || (isWindows(platform) && ch === '\\');
+}
+
+/** True when a character immediately before a path makes it part of prose. */
+function isPathPrefixCharacter(ch: string): boolean {
+  return /[A-Za-z0-9_.~\\/\\:@%+=,-]/.test(ch);
+}
+
+/** True for a character that can continue a filesystem path component. */
+function isPathComponentCharacter(ch: string, platform: string): boolean {
+  // Whitespace ends a path token in diagnostic prose, even though POSIX can
+  // represent it in a filename.
+  if (isSeparator(ch, platform) || ch === '\0' || /\s/.test(ch)) return false;
+
+  // POSIX permits every non-NUL, non-slash character in a path component.
+  // Windows is more restrictive, but a dash is valid on both platforms (as
+  // are many characters that would be too easy to misclassify as prose).
+  return !isWindows(platform) || !/[<>:"|?*\x00-\x1F]/.test(ch);
 }
 
 /**
@@ -102,13 +114,12 @@ export function abbreviateHomeInText(
       const after = end === result.length ? undefined : result[end];
       const startsOnBoundary =
         before === undefined ||
-        !isPathCharacter(before) ||
+        !isPathPrefixCharacter(before) ||
         (alias.startsWith('/') && before === '/');
       // A home directory can end a path in diagnostic prose too: "failed to
       // open /home/max (EACCES)". Keep word-like continuations guarded so a
       // sibling such as /home/maxwell is never partially replaced.
-      const endsOnBoundary =
-        after === undefined || isSeparator(after, platform) || !/[A-Za-z0-9_.~]/.test(after);
+      const endsOnBoundary = after === undefined || !isPathComponentCharacter(after, platform);
 
       if (startsOnBoundary && endsOnBoundary) {
         redacted += result.slice(cursor, index) + '~';
