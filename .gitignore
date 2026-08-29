@@ -43,3 +43,6 @@ packages/vscode-ext/bin/
 # Superpowers goal-loops runtime state (transient planning artifacts)
 .goal-loops/
 dist/
+
+# git worktrees (agent workflow)
+.worktrees/
