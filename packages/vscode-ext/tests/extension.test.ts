@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import * as fakeVscode from './mocks/vscode';
 import * as ext from '../src/extension';
+import type * as DefinesCommandsModule from '../src/definesCommands';
 
 /**
  * Activation-level tests for the status bar and commands (B043).
@@ -31,6 +32,23 @@ const lc = vi.hoisted(() => {
     stopCount = 0;
     disposeCount = 0;
     running = false;
+
+    /** Requests the extension sent, in order (B050). */
+    static requests: { method: string; params: unknown }[] = [];
+    /** Canned answers by method; an unlisted method rejects, as the real
+     *  router does with MethodNotFound. */
+    static responses: Record<string, unknown> = {};
+
+    /** `extension.ts` gates the B050 request on this. */
+    get state(): number {
+      return this.running ? State.Running : State.Stopped;
+    }
+
+    async sendRequest(method: string, params: unknown): Promise<unknown> {
+      FakeLanguageClient.requests.push({ method, params });
+      if (method in FakeLanguageClient.responses) return FakeLanguageClient.responses[method];
+      throw new Error(`Unhandled method ${method}`);
+    }
 
     constructor(
       readonly id: string,
@@ -89,10 +107,34 @@ const lc = vi.hoisted(() => {
       FakeLanguageClient.instances = [];
       FakeLanguageClient.nextStartError = undefined;
       FakeLanguageClient.startGate = undefined;
+      FakeLanguageClient.requests = [];
+      FakeLanguageClient.responses = {};
     }
   }
 
   return { State, FakeLanguageClient };
+});
+
+/**
+ * B050: capture the introspection provider `activate()` installs, without
+ * putting a test-only export in production code. Everything else is the real
+ * module, so the command table and handlers below are unaffected.
+ */
+const defines = vi.hoisted(() => ({
+  installed: [] as (((uri?: string) => Promise<unknown>) | undefined)[],
+}));
+
+vi.mock('../src/definesCommands', async () => {
+  const actual = await vi.importActual<typeof DefinesCommandsModule>('../src/definesCommands');
+  return {
+    ...actual,
+    setResolvedDefinesProvider: (provider?: (uri?: string) => Promise<unknown>) => {
+      defines.installed.push(provider);
+      actual.setResolvedDefinesProvider(
+        provider as Parameters<typeof actual.setResolvedDefinesProvider>[0],
+      );
+    },
+  };
 });
 
 vi.mock('vscode-languageclient/node', () => ({
@@ -195,6 +237,7 @@ function onUnhandled(reason: unknown): void {
 beforeEach(() => {
   fakeVscode.__reset();
   lc.FakeLanguageClient.reset();
+  defines.installed.length = 0;
   probes.probeServerVersion.mockReset();
   probes.probeServerVersion.mockResolvedValue('9.9.9-probe');
   probes.probeTypeDb.mockReset();
@@ -773,6 +816,110 @@ describe('status tooltip redaction choke point', () => {
     await settle();
 
     expect(statusItem().tooltip).not.toContain(homedir());
+    await ext.deactivate();
+  });
+});
+
+/**
+ * B050 wiring gate.
+ *
+ * The defines command tests drive `manageDefines` with a provider they
+ * installed themselves, which proves the UI can USE one — not that the real
+ * extension ever supplies one. That gap is exactly the failure B040 was filed
+ * for: a handler that existed, was tested, and was never wired. So this
+ * asserts the live path end to end — activate installs a provider, the
+ * provider finds the running client, sends the right method, and parses what
+ * comes back.
+ */
+describe('resolved-defines provider (B050)', () => {
+  const ANSWER = {
+    defines: [
+      { name: 'TMNEXT', active: true, origin: 'target', derivedActive: true },
+      { name: 'DEPENDENCY_MLHOOK', active: true, origin: 'dependency', derivedActive: true },
+    ],
+    gameTarget: 'TMNEXT',
+    platformFamilies: [['TMNEXT'], ['MP4', 'MP40', 'MP41']],
+  };
+
+  /** The provider `activate()` most recently installed. */
+  function provider() {
+    const found = defines.installed.filter((p) => p !== undefined).at(-1);
+    expect(found, 'activate() installed no resolved-defines provider').toBeDefined();
+    return found!;
+  }
+
+  it('is installed by activate and cleared by deactivate', async () => {
+    const ext = await loadExtension();
+    ext.activate(makeContext() as never);
+    await settle();
+    expect(defines.installed.filter((p) => p !== undefined)).toHaveLength(1);
+    await ext.deactivate();
+    // It closes over `client` and `outputChannel`; leaving it installed would
+    // outlive both.
+    expect(defines.installed.at(-1)).toBeUndefined();
+  });
+
+  it('sends openplanet/resolvedDefines to the running client and parses the answer', async () => {
+    lc.FakeLanguageClient.responses['openplanet/resolvedDefines'] = ANSWER;
+    const ext = await loadExtension();
+    ext.activate(makeContext() as never);
+    await settle();
+
+    const result = await provider()('file:///ws/my-plugin/src/Main.as');
+
+    expect(lc.FakeLanguageClient.requests).toEqual([
+      {
+        method: 'openplanet/resolvedDefines',
+        params: { uri: 'file:///ws/my-plugin/src/Main.as' },
+      },
+    ]);
+    // The manifest-derived define reaches the UI with its origin intact —
+    // the whole point of B050.
+    expect(result).toEqual(ANSWER);
+    await ext.deactivate();
+  });
+
+  it('degrades to undefined against a server without the method', async () => {
+    // No canned response: the fake rejects, as a pre-B050 router does with
+    // MethodNotFound. Manage Defines must still open.
+    const ext = await loadExtension();
+    ext.activate(makeContext() as never);
+    await settle();
+    await expect(provider()('file:///ws/my-plugin/src/Main.as')).resolves.toBeUndefined();
+    await ext.deactivate();
+  });
+
+  it('does not send a request while the client is stopped', async () => {
+    lc.FakeLanguageClient.responses['openplanet/resolvedDefines'] = ANSWER;
+    const ext = await loadExtension();
+    ext.activate(makeContext() as never);
+    await settle();
+    const ask = provider();
+    await lc.FakeLanguageClient.instances.at(-1)!.stop();
+    lc.FakeLanguageClient.requests = [];
+    // `sendRequest` on a stopped client rejects; the state guard is what keeps
+    // that off the happy path.
+    await expect(ask('file:///ws/my-plugin/src/Main.as')).resolves.toBeUndefined();
+    expect(lc.FakeLanguageClient.requests).toEqual([]);
+    await ext.deactivate();
+  });
+
+  it('follows a restart instead of pinning the first client', async () => {
+    lc.FakeLanguageClient.responses['openplanet/resolvedDefines'] = ANSWER;
+    const ext = await loadExtension();
+    ext.activate(makeContext() as never);
+    await settle();
+    const ask = provider();
+
+    await run('openplanetLsp.restart');
+    await settle();
+    expect(lc.FakeLanguageClient.instances.length).toBeGreaterThan(1);
+
+    lc.FakeLanguageClient.requests = [];
+    await expect(ask('file:///ws/my-plugin/src/Main.as')).resolves.toEqual(ANSWER);
+    // The SAME provider closure served the NEW client: it reads `client` at
+    // call time rather than capturing an instance.
+    expect(lc.FakeLanguageClient.requests).toHaveLength(1);
     await ext.deactivate();
   });
 });

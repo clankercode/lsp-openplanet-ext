@@ -532,6 +532,10 @@ export function deactivate(): Thenable<void> | undefined {
   startGeneration += 1;
   restarting = false;
   clearRestartTimer();
+  // Drop the introspection closure here as well as in `resetModuleState`:
+  // this path does NOT go through that function, and a provider left behind
+  // would outlive the client and the output channel it closes over.
+  setResolvedDefinesProvider(undefined);
   clientStateSub?.dispose();
   clientStateSub = undefined;
   statusItem?.dispose();
