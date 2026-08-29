@@ -320,6 +320,31 @@ describe('server state -> status bar', () => {
     await ext.deactivate();
   });
 
+  it('redacts the home directory from a startup failure tooltip', async () => {
+    lc.FakeLanguageClient.nextStartError = new Error(
+      `spawn ${homedir()}/.local/bin/openplanet-lsp ENOENT`,
+    );
+    const ext = await loadExtension();
+    ext.activate(makeContext() as never);
+    await settle();
+
+    const tooltip = statusItem().tooltip!;
+    expect(tooltip).not.toContain(homedir());
+    expect(tooltip).toContain('spawn ~/.local/bin/openplanet-lsp ENOENT');
+    await ext.deactivate();
+  });
+
+  it('redacts the workspace root in the status tooltip', async () => {
+    const ext = await loadExtension();
+    ext.activate(makeContext() as never);
+    await settle();
+
+    const tooltip = statusItem().tooltip!;
+    expect(tooltip).not.toContain(homedir());
+    expect(tooltip).toContain('Workspace:   ~/src/my-plugin');
+    await ext.deactivate();
+  });
+
   it('uses a missing serverPath override as the command and reports its failure', async () => {
     fakeVscode.__setConfig({ 'openplanetLsp.serverPath': '/no/such/openplanet-lsp' });
     lc.FakeLanguageClient.nextStartError = new Error('spawn openplanet-lsp ENOENT');

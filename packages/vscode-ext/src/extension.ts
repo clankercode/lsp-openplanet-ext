@@ -10,7 +10,7 @@ import {
   TransportKind,
 } from 'vscode-languageclient/node';
 import { buildInitializationOptions, type OpenplanetLspSettings } from './settings';
-import { abbreviateHome, abbreviateHomeInText } from './paths';
+import { abbreviateHomeInText } from './paths';
 import { renderStatusBar, type StatusInfo } from './status';
 import { buildStatusReport } from './statusReport';
 import { probeServerVersion, probeTypeDb } from './serverProbe';
@@ -83,6 +83,27 @@ function redactHome(text: string | undefined, home = homeDir()): string | undefi
   return abbreviateHomeInText(text, homeAliases(home));
 }
 
+/**
+ * StatusInfo is rendered straight into the status-bar tooltip. Redact its
+ * path-bearing fields before retaining them, so later paints cannot expose
+ * either the logical HOME path or its realpath alias.
+ */
+function redactStatusPatch(patch: Partial<StatusInfo>): Partial<StatusInfo> {
+  const redacted = { ...patch };
+  const home = homeDir();
+
+  if ('failureReason' in redacted)
+    redacted.failureReason = redactHome(redacted.failureReason, home);
+  if ('serverPath' in redacted) redacted.serverPath = redactHome(redacted.serverPath, home);
+  if ('workspaceRoot' in redacted)
+    redacted.workspaceRoot = redactHome(redacted.workspaceRoot, home);
+  if ('typeDb' in redacted && redacted.typeDb) {
+    redacted.typeDb = { ...redacted.typeDb, source: redactHome(redacted.typeDb.source, home) };
+  }
+
+  return redacted;
+}
+
 function isCurrentStart(generation: number, candidate?: LanguageClient): boolean {
   return !deactivated && startGeneration === generation && (!candidate || client === candidate);
 }
@@ -110,7 +131,7 @@ function activeWorkspaceRoot(): string | undefined {
 /** Merge a patch into the status and repaint. The ONLY way the item changes. */
 function setStatus(patch: Partial<StatusInfo>): void {
   if (deactivated) return;
-  status = { ...status, ...patch };
+  status = { ...status, ...redactStatusPatch(patch) };
   paintStatus();
 }
 
@@ -190,13 +211,12 @@ function resolveServerCommand(settings: OpenplanetLspSettings, extensionPath: st
  * tooltip then says "unknown", which is itself a useful signal.
  */
 function probeBinary(bin: string, generation: number): void {
-  const home = homeDir();
   void probeServerVersion(bin).then((serverVersion) => {
     if (isCurrentStart(generation) && serverVersion) setStatus({ serverVersion });
   });
   void probeTypeDb(bin).then((db) => {
     if (!isCurrentStart(generation) || !db) return;
-    setStatus({ typeDb: { ...db, source: redactHome(db.source, home) } });
+    setStatus({ typeDb: db });
   });
 }
 
@@ -210,11 +230,10 @@ async function startClient(
   if (!isCurrentStart(generation)) return;
   resolvedServerPath = serverBin;
 
-  const home = homeDir();
   setStatus({
-    serverPath: redactHome(serverBin, home),
+    serverPath: serverBin,
     gameTarget: settings.gameTarget,
-    workspaceRoot: abbreviateHome(activeWorkspaceRoot(), home),
+    workspaceRoot: activeWorkspaceRoot(),
     // A previous run's versions would be a lie about the binary now starting.
     serverVersion: undefined,
     typeDb: undefined,
@@ -423,7 +442,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   setStatus({
     gameTarget: readSettings().gameTarget,
-    workspaceRoot: abbreviateHome(activeWorkspaceRoot(), homeDir()),
+    workspaceRoot: activeWorkspaceRoot(),
   });
 
   void startClient(context);
@@ -456,7 +475,7 @@ export function activate(context: vscode.ExtensionContext): void {
   // looking at, so follow the active editor rather than pinning folder 0.
   context.subscriptions.push(
     vscode.window.onDidChangeActiveTextEditor(() => {
-      setStatus({ workspaceRoot: abbreviateHome(activeWorkspaceRoot(), homeDir()) });
+      setStatus({ workspaceRoot: activeWorkspaceRoot() });
     }),
   );
 
