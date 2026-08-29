@@ -29,16 +29,21 @@
  *
  * ## What this module deliberately does NOT do
  *
- * It never derives the base set. No server request exposes the resolved
- * defines today, and re-deriving them here would duplicate the config ladder
- * (B017) and the manifest/dependency rules (B019) in a second place that
- * would drift. Where the derived state is unknown, `derivedOn` is left
- * `undefined` and an explicit entry is written instead of a minimal one.
- * When a `openplanet-lsp/resolvedDefines`-style request lands, feeding its
- * answer to {@link buildDefineRows} is the whole integration.
+ * It never derives the base set. Re-deriving it here would duplicate the
+ * config ladder (B017) and the manifest/dependency rules (B019) in a second
+ * place that would drift. Since B050 it does not have to: the server answers
+ * `openplanet/resolvedDefines` with the whole set and an origin per entry,
+ * and {@link buildDefineRows} takes that answer directly (see
+ * `resolvedDefines.ts`).
+ *
+ * The degraded path is still live and still honest. With no server — stopped,
+ * crashed, or a build older than B050 — `resolved` is `undefined`, the rows
+ * are the user's own overrides, `derivedOn` stays `undefined`, and an
+ * explicit entry is written instead of a minimal one. That is B034's
+ * behaviour, kept as the fallback rather than as the only mode.
  */
 
-import { isPlatformSelector, platformFamilyFor } from './settings';
+import { isPlatformSelector, platformFamilyFor, type PlatformFamilies } from './settings';
 
 /** Prefixes the server accepts to turn a define OFF. */
 export const NEGATION_PREFIXES = ['-', '!'] as const;
@@ -98,7 +103,11 @@ export interface DefineEdit {
   derivedOn?: boolean;
 }
 
-/** One define as a future server introspection request would report it. */
+/**
+ * One define as `openplanet/resolvedDefines` reports it (B050). The wire
+ * shape is produced by `ResolvedDefine` in the server's `src/config.rs`;
+ * `resolvedDefines.ts` validates it before anything here sees it.
+ */
 export interface ResolvedDefine {
   name: string;
   /** Effective state, overrides included. */
@@ -244,26 +253,32 @@ export function removeDefineEntries(entries: readonly string[], raws: readonly s
  * adds bucket — so callers must not consult this for a `-NAME` entry.
  *
  * Same family is not foreign (`MP40` under `MP4` is ordinary), which is why
- * this needs `PLATFORM_FAMILIES` and not a flat membership test. An
+ * this needs the family GROUPING and not a flat membership test. An
  * unrecognised `gameTarget` warns for every selector, matching the server's
  * `platform_family_for_target(...).unwrap_or(&[])`.
  *
  * Returns `undefined` when there is no target to compare against: a guess
  * would be worse than silence.
  *
- * CAVEAT: `gameTarget` here is the VS Code setting. Left at its `TMNEXT`
- * default nothing is forwarded (see `buildInitializationOptions`), so a
- * workspace `.openplanet-lsp.toml` may set a different effective target and
- * this warning can be wrong. It is non-blocking, so that costs a spurious
- * line of prose, never a blocked edit.
+ * `families` is the table from `openplanet/resolvedDefines` when the caller
+ * has an answer, and the bundled fallback otherwise (B050).
+ *
+ * CAVEAT, and B050 narrows it: `gameTarget` is the VS Code setting unless the
+ * caller passes the server's resolved one. Left at its `TMNEXT` default
+ * nothing is forwarded (see `buildInitializationOptions`), so a workspace
+ * `.openplanet-lsp.toml` may set a different effective target and this
+ * warning can be wrong — which is why every caller that HAS a server answer
+ * passes `result.gameTarget` here instead. Offline the caveat stands; it is
+ * non-blocking, so that costs a spurious line of prose, never a blocked edit.
  */
 export function platformSelectorCaution(
   name: string,
   gameTarget: string | undefined,
+  families?: PlatformFamilies,
 ): string | undefined {
   if (!gameTarget) return undefined;
-  if (!isPlatformSelector(name)) return undefined;
-  if (platformFamilyFor(gameTarget)?.includes(name)) return undefined;
+  if (!isPlatformSelector(name, families)) return undefined;
+  if (platformFamilyFor(gameTarget, families)?.includes(name)) return undefined;
   return (
     `\`${name}\` is a platform selector for another game. Adding it REPLACES the ` +
     `platform selectors your game target (\`${gameTarget}\`) derives, so every ` +
@@ -283,7 +298,11 @@ export function platformSelectorCaution(
  * so refusing an odd name would make this UI weaker than raw JSON — while
  * saying nothing would let a typo look like it worked.
  */
-export function validateDefineEntry(raw: string, gameTarget?: string): DefineNameIssue | undefined {
+export function validateDefineEntry(
+  raw: string,
+  gameTarget?: string,
+  families?: PlatformFamilies,
+): DefineNameIssue | undefined {
   const parsed = parseDefineEntry(raw);
   if (!parsed) {
     return {
@@ -295,7 +314,7 @@ export function validateDefineEntry(raw: string, gameTarget?: string): DefineNam
   if (IDENTIFIER.test(name)) {
     // Only an add can trip the platform-selector replacement, so a `-NAME`
     // removal is silent here.
-    const caution = on ? platformSelectorCaution(name, gameTarget) : undefined;
+    const caution = on ? platformSelectorCaution(name, gameTarget, families) : undefined;
     return caution ? { severity: 'warning', message: caution } : undefined;
   }
 
@@ -313,13 +332,13 @@ export function validateDefineEntry(raw: string, gameTarget?: string): DefineNam
 /**
  * Rows for the manage QuickPick.
  *
- * With `resolved` (a future server introspection answer) the rows are the
- * whole resolved set, in the server's order, with the user's overrides merged
- * on and any override the server did not mention appended.
+ * With `resolved` (an `openplanet/resolvedDefines` answer, B050) the rows are
+ * the whole resolved set, in the server's order, with the user's overrides
+ * merged on and any override the server did not mention appended.
  *
- * Without it — the situation today — the only defines the extension can name
- * truthfully are the user's own overrides, and the only honest origin is
- * `user`. It does NOT guess at the base set.
+ * Without it — no server, or one older than B050 — the only defines the
+ * extension can name truthfully are the user's own overrides, and the only
+ * honest origin is `user`. It does NOT guess at the base set.
  */
 export function buildDefineRows(
   entries: readonly string[],

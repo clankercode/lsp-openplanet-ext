@@ -550,3 +550,58 @@ describe('validateDefineEntry with a game target', () => {
     expect(validateDefineEntry('MP4')).toBeUndefined();
   });
 });
+
+/**
+ * B050: the foreign-selector guard asks the server when it can.
+ *
+ * B034 shipped a duplicated family table because nothing exposed the server's.
+ * Now that `openplanet/resolvedDefines` carries it, the copy is the OFFLINE
+ * fallback and the server's answer wins — including when the two disagree,
+ * which is the only case where the distinction is observable.
+ */
+describe('platformSelectorCaution with a server family table', () => {
+  const SERVER: readonly (readonly string[])[] = [['TMNEXT'], ['MP4', 'MP40', 'MP41', 'MP42']];
+
+  it('treats a selector as same-family per the SERVER table', () => {
+    expect(platformSelectorCaution('MP42', 'MP4', SERVER)).toBeUndefined();
+  });
+
+  it('catches a hazard the stale bundled copy would MISS', () => {
+    // This is the drift that matters, and it fails silently in the direction
+    // that hurts: `MP42` is a selector the bundled table has never heard of,
+    // so offline the guard says nothing — while the server would replace
+    // TMNEXT's selectors and kill every `#if TMNEXT` branch (GH #36).
+    expect(platformSelectorCaution('MP42', 'TMNEXT', SERVER)).toContain('MP42');
+    expect(platformSelectorCaution('MP42', 'TMNEXT')).toBeUndefined();
+  });
+
+  it('still warns for a genuinely foreign selector', () => {
+    const caution = platformSelectorCaution('TMNEXT', 'MP4', SERVER);
+    expect(caution).toContain('TMNEXT');
+    expect(caution).toContain('MP4');
+  });
+
+  it('is silent for a name the server table does not know at all', () => {
+    // Not a selector per the server, so not the GH #36 hazard.
+    expect(platformSelectorCaution('TURBO', 'MP4', SERVER)).toBeUndefined();
+  });
+
+  it('falls back to the bundled table when the server sent none', () => {
+    for (const families of [undefined, []]) {
+      expect(platformSelectorCaution('MP4', 'TMNEXT', families)).toContain('MP4');
+      expect(platformSelectorCaution('MP41', 'MP4', families)).toBeUndefined();
+    }
+  });
+
+  it('validateDefineEntry forwards the families to the guard', () => {
+    // The InputBox validator is synchronous, so it can only use a table that
+    // has already arrived — but when one has, it must be the one used.
+    expect(validateDefineEntry('MP42', 'MP4', SERVER)).toBeUndefined();
+    expect(validateDefineEntry('MP42', 'TMNEXT', SERVER)?.severity).toBe('warning');
+    // Offline the same entry is accepted without comment — a valid
+    // identifier the bundled table cannot recognise as a selector.
+    expect(validateDefineEntry('MP42', 'TMNEXT')).toBeUndefined();
+    // A removal never trips the replacement, with or without a table.
+    expect(validateDefineEntry('-TMNEXT', 'MP4', SERVER)).toBeUndefined();
+  });
+});
