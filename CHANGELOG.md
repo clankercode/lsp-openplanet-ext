@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- AngelScript snippets for Openplanet plugin boilerplate (B042): every
+  documented plugin callback (`Main`, `Update`, the four render passes,
+  `RenderMenu`/`RenderMenuMain`, the `OnEnabled`/`OnDisabled`/`OnDestroyed`/
+  `OnSettingsChanged` lifecycle hooks, and the keyboard/mouse callbacks in both
+  their `void` and `UI::InputBlocking` forms), the `[Setting ...]` attribute
+  shapes (plain, `name`, `description`, `category`, `min`/`max`, `drag`,
+  `color`, `hidden`, `[SettingsTab]`), and the coroutine shapes (`startnew`
+  returning `awaitable@`, a `while (true) { ... yield(); }` skeleton). Prefixes
+  are namespaced `op*` so they never fire on ordinary identifier typing.
+  Signatures were taken from the Openplanet documentation, cited in the header
+  of `packages/vscode-ext/snippets/angelscript.json`.
+
 - `openplanetLsp.inactiveRegions` — grey out `#if` branches your current
   defines switch off, the way an IDE fades `#if 0` in C, so you can see which
   code your `gameTarget` / `signatureMode` have turned off. `hint` (the server
