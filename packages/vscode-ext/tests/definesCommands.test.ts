@@ -182,6 +182,19 @@ describe('manageDefines', () => {
     expect(fakeVscode.recorded.messages.at(-1)?.items).toContain('Add Define');
     expect(updates()).toHaveLength(0);
   });
+
+  it('does not ask for the scope twice when chaining into Add Define', async () => {
+    queueScope('Workspace');
+    queueButton('Add Define');
+    fakeVscode.__queueInputBox(() => 'MYFLAG');
+    await manageDefines();
+    // The user answered the scope question once, in Manage Defines; asking it
+    // again on the way into Add Define is the same question twice.
+    expect(fakeVscode.recorded.quickPicks).toHaveLength(1);
+    expect(updates()).toEqual([
+      { section: 'openplanetLsp', key: 'defines', value: ['MYFLAG'], target: TARGET.Workspace },
+    ]);
+  });
 });
 
 describe('scope isolation', () => {

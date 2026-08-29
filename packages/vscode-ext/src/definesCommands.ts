@@ -176,7 +176,8 @@ export async function manageDefines(log?: Logger): Promise<void> {
         'The defines derived from your game target, signature level and info.toml still apply.',
       'Add Define',
     );
-    if (choice === 'Add Define') await addDefine(log);
+    // Carry the scope through: the user has just answered that question.
+    if (choice === 'Add Define') await addDefine(log, scope);
     return;
   }
 
@@ -198,8 +199,13 @@ export async function manageDefines(log?: Logger): Promise<void> {
   await writeDefines(scope, applyDefineEdits(entries, edits), log);
 }
 
-/** Input box → one appended (or replaced) entry. */
-export async function addDefine(log?: Logger): Promise<void> {
+/**
+ * Input box → one appended (or replaced) entry.
+ *
+ * `presetScope` is passed when the caller has already asked, so chaining out
+ * of **Manage Defines** does not put the same question twice in a row.
+ */
+export async function addDefine(log?: Logger, presetScope?: DefinesScope): Promise<void> {
   const typed = await vscode.window.showInputBox({
     title: 'Add Define',
     prompt:
@@ -226,7 +232,7 @@ export async function addDefine(log?: Logger): Promise<void> {
   // programmatic invocation of the command.
   if (!parsed) return;
 
-  const scope = await pickScope('Add Define');
+  const scope = presetScope ?? (await pickScope('Add Define'));
   if (!scope) return;
 
   const entries = baseEntriesForScope(inspectDefines(), scope);
