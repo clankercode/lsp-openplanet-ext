@@ -370,9 +370,10 @@ export async function addDefine(log?: Logger, presetScope?: DefinesScope): Promi
     // Nothing to write. With a server answer that is usually because the
     // define is ALREADY in the wanted state without an override, and saying
     // so beats a silent no-op that reads like a failed command.
-    const already = derived.get(parsed.name) === parsed.on;
+    const hasEntry = parseDefineEntries(entries).some((e) => e.name === parsed.name);
+    const alreadyDerived = !hasEntry && derived.get(parsed.name) === parsed.on;
     void vscode.window.showInformationMessage(
-      already
+      alreadyDerived
         ? `\`${parsed.name}\` is already ${parsed.on ? 'on' : 'off'} without an override, ` +
             'so no setting was written.'
         : `openplanetLsp.defines already says that; nothing was written.`,

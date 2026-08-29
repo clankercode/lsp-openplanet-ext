@@ -806,3 +806,48 @@ describe('addDefine with server introspection', () => {
     expect(lastWrite()).toEqual(['-LOGS']);
   });
 });
+
+/**
+ * B050 regressions the review loop surfaced, pinned so the simpler design
+ * that avoids them stays that way. Both are cases where a fix that DELETES
+ * entries needs extra special-casing; not deleting needs none.
+ */
+describe('addDefine near a foreign platform selector', () => {
+  const FAMILIES = [['TMNEXT'], ['MP4', 'MP40', 'MP41'], ['TURBO']];
+  afterEach(() => setResolvedDefinesProvider(undefined));
+
+  function serveSelectors(defines: { name: string; active: boolean; derivedActive: boolean }[]) {
+    setResolvedDefinesProvider(async () => ({
+      gameTarget: 'TMNEXT',
+      platformFamilies: FAMILIES,
+      defines: defines.map((d) => ({ ...d, origin: 'target' as const })),
+    }));
+  }
+
+  it('leaves an already-effective target and its foreign neighbour alone', async () => {
+    // `["MP4","TMNEXT"]` is a legitimate array: the explicit TMNEXT survives
+    // the replacement, so BOTH are live. Re-adding TMNEXT must not delete
+    // either entry.
+    serveSelectors([
+      { name: 'TMNEXT', active: true, derivedActive: true },
+      { name: 'MP4', active: true, derivedActive: false },
+    ]);
+    fakeVscode.__setConfigScopes({ [KEY]: { workspaceValue: ['MP4', 'TMNEXT'] } });
+    fakeVscode.__queueInputBox(() => 'TMNEXT');
+    queueScope('Workspace');
+    await addDefine();
+    expect(updates()).toHaveLength(0);
+  });
+
+  it('drops a local -NAME even when the server answer predates it', async () => {
+    // The server answers from before the restart, so it still reports TMNEXT
+    // on. The `-TMNEXT` the user just wrote is newer and must be removed, not
+    // treated as "already on".
+    serveSelectors([{ name: 'TMNEXT', active: true, derivedActive: true }]);
+    fakeVscode.__setConfigScopes({ [KEY]: { workspaceValue: ['-TMNEXT', 'KEEP'] } });
+    fakeVscode.__queueInputBox(() => 'TMNEXT');
+    queueScope('Workspace');
+    await addDefine();
+    expect(lastWrite()).toEqual(['KEEP']);
+  });
+});
