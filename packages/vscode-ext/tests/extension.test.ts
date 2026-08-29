@@ -101,15 +101,17 @@ vi.mock('vscode-languageclient/node', () => ({
   TransportKind: { stdio: 'stdio' },
 }));
 
+const probes = vi.hoisted(() => ({
+  probeServerVersion: vi.fn<() => Promise<string | undefined>>(),
+  probeTypeDb:
+    vi.fn<() => Promise<{ core?: string; game?: string; source?: string } | undefined>>(),
+}));
+
 // The probes spawn a real binary; in tests there is none, and a spawn per
 // activation would make the suite slow and machine-dependent.
 vi.mock('../src/serverProbe', () => ({
-  probeServerVersion: vi.fn(async () => '9.9.9-probe'),
-  probeTypeDb: vi.fn(async () => ({
-    core: '1.29.5',
-    game: '1.29.5',
-    source: `${homedir()}/OpenplanetNext`,
-  })),
+  probeServerVersion: probes.probeServerVersion,
+  probeTypeDb: probes.probeTypeDb,
   PROBE_TIMEOUT_MS: 5_000,
 }));
 
@@ -125,6 +127,12 @@ const EXPECTED_COMMANDS = [
   'openplanetLsp.restartVerbose',
   'openplanetLsp.showLogs',
   'openplanetLsp.showStatus',
+];
+
+const EXPECTED_ACTIVATION_EVENTS = [
+  'onLanguage:angelscript',
+  'workspaceContains:**/info.toml',
+  ...EXPECTED_COMMANDS.map((id) => `onCommand:${id}`),
 ];
 
 interface FakeContext {
@@ -182,6 +190,14 @@ function onUnhandled(reason: unknown): void {
 beforeEach(() => {
   fakeVscode.__reset();
   lc.FakeLanguageClient.reset();
+  probes.probeServerVersion.mockReset();
+  probes.probeServerVersion.mockResolvedValue('9.9.9-probe');
+  probes.probeTypeDb.mockReset();
+  probes.probeTypeDb.mockResolvedValue({
+    core: '1.29.5',
+    game: '1.29.5',
+    source: `${homedir()}/OpenplanetNext`,
+  });
   unhandled = [];
   process.on('unhandledRejection', onUnhandled);
   fakeVscode.__setWorkspaceFolders([`${homedir()}/src/my-plugin`]);
@@ -189,6 +205,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   process.off('unhandledRejection', onUnhandled);
 });
 
@@ -221,9 +238,8 @@ describe('contributes.commands (package.json)', () => {
     expect(ids).not.toContain('openplanet.regenerateTypeDb');
   });
 
-  it('declares explicit activation events', () => {
-    expect(pkg.activationEvents.length).toBeGreaterThan(0);
-    expect(pkg.activationEvents).toContain('onLanguage:angelscript');
+  it('declares the complete explicit language, workspace and command activation contract', () => {
+    expect([...pkg.activationEvents].sort()).toEqual([...EXPECTED_ACTIVATION_EVENTS].sort());
   });
 
   it('does not activate on every window', () => {
@@ -304,13 +320,16 @@ describe('server state -> status bar', () => {
     await ext.deactivate();
   });
 
-  it('names the missing serverPath override and still reaches a clean state', async () => {
+  it('uses a missing serverPath override as the command and reports its failure', async () => {
     fakeVscode.__setConfig({ 'openplanetLsp.serverPath': '/no/such/openplanet-lsp' });
     lc.FakeLanguageClient.nextStartError = new Error('spawn openplanet-lsp ENOENT');
     const ext = await loadExtension();
     ext.activate(makeContext() as never);
     await settle();
     expect(fakeVscode.recorded.warnings.join('\n')).toContain('/no/such/openplanet-lsp');
+    expect(lc.FakeLanguageClient.instances[0].serverOptions.command).toBe(
+      '/no/such/openplanet-lsp',
+    );
     expect(statusItem().text).toContain('failed');
     expect(unhandled).toEqual([]);
     await ext.deactivate();
@@ -347,6 +366,20 @@ describe('server state -> status bar', () => {
     release();
     lc.FakeLanguageClient.startGate = undefined;
     await settle();
+    expect(statusItem().tooltip).toContain('ready');
+    await ext.deactivate();
+  });
+
+  it('serializes back-to-back restart requests into one replacement client', async () => {
+    const ext = await loadExtension();
+    ext.activate(makeContext() as never);
+    await settle();
+
+    void run('openplanetLsp.restart');
+    void run('openplanetLsp.restart');
+    await settle();
+
+    expect(lc.FakeLanguageClient.instances).toHaveLength(2);
     expect(statusItem().tooltip).toContain('ready');
     await ext.deactivate();
   });
@@ -423,6 +456,40 @@ describe('commands', () => {
     const content = fakeVscode.recorded.openedTextDocuments.at(-1)!.content;
     expect(content).not.toContain(homedir());
     expect(content).toContain('~/src/my-plugin');
+    await ext.deactivate();
+  });
+
+  it('keeps the newest binary and probe data when an older probe resolves late', async () => {
+    let releaseOldVersion: (value: string) => void = () => {};
+    let releaseOldDb: (value: { core: string; source: string }) => void = () => {};
+    probes.probeServerVersion.mockImplementationOnce(
+      () => new Promise<string>((resolve) => (releaseOldVersion = resolve)),
+    );
+    probes.probeServerVersion.mockResolvedValueOnce('2.0.0-new');
+    probes.probeTypeDb.mockImplementationOnce(
+      () => new Promise((resolve) => (releaseOldDb = resolve)),
+    );
+    probes.probeTypeDb.mockResolvedValueOnce({ core: '2.0-db', source: `${homedir()}/new-db` });
+    fakeVscode.__setConfig({ 'openplanetLsp.serverPath': 'old-lsp' });
+
+    const ext = await loadExtension();
+    ext.activate(makeContext() as never);
+    await settle();
+    fakeVscode.__setConfig({ 'openplanetLsp.serverPath': 'new-lsp' });
+    await run('openplanetLsp.restart');
+    await settle();
+
+    releaseOldVersion('1.0.0-old');
+    releaseOldDb({ core: '1.0-db', source: `${homedir()}/old-db` });
+    await settle();
+    await run('openplanetLsp.showStatus');
+
+    const content = fakeVscode.recorded.openedTextDocuments.at(-1)!.content;
+    expect(content).toContain('new-lsp');
+    expect(content).toContain('2.0.0-new');
+    expect(content).toContain('2.0-db');
+    expect(content).not.toContain('1.0.0-old');
+    expect(content).not.toContain('1.0-db');
     await ext.deactivate();
   });
 
@@ -510,6 +577,19 @@ describe('workspace shapes', () => {
     await ext.deactivate();
   });
 
+  it('selects the longest matching root for an editor in nested workspace folders', async () => {
+    const outer = `${homedir()}/src/plugin`;
+    const nested = `${outer}/vendor/nested-plugin`;
+    fakeVscode.__setWorkspaceFolders([outer, nested]);
+    fakeVscode.__setActiveEditor(`${nested}/src/Main.as`);
+
+    const ext = await loadExtension();
+    ext.activate(makeContext() as never);
+    await settle();
+    expect(statusItem().tooltip).toContain('~/src/plugin/vendor/nested-plugin');
+    await ext.deactivate();
+  });
+
   it('falls back to the first folder when no editor is active', async () => {
     const a = `${homedir()}/src/plugin-a`;
     fakeVscode.__setWorkspaceFolders([a, `${homedir()}/src/plugin-b`]);
@@ -549,6 +629,73 @@ describe('deactivate', () => {
     const paintsAtDisposal = item.shownCount;
     release();
     await settle();
+    expect(item.shownCount).toBe(paintsAtDisposal);
+    expect(unhandled).toEqual([]);
+  });
+
+  it('cancels a pending config restart when deactivated', async () => {
+    vi.useFakeTimers();
+    const ext = await loadExtension();
+    ext.activate(makeContext() as never);
+    await settle();
+    expect(lc.FakeLanguageClient.instances).toHaveLength(1);
+
+    fakeVscode.__fireConfigChange('openplanetLsp.gameTarget');
+    await ext.deactivate();
+    await vi.advanceTimersByTimeAsync(1_000);
+    await settle();
+
+    expect(lc.FakeLanguageClient.instances).toHaveLength(1);
+    expect(unhandled).toEqual([]);
+  });
+
+  it('ignores an old start rejection after deactivate and a successful reactivation', async () => {
+    let releaseOldStart: () => void = () => {};
+    lc.FakeLanguageClient.startGate = new Promise<void>((resolve) => {
+      releaseOldStart = resolve;
+    });
+    const ext = await loadExtension();
+    ext.activate(makeContext() as never);
+    await settle();
+    await ext.deactivate();
+
+    lc.FakeLanguageClient.startGate = undefined;
+    ext.activate(makeContext() as never);
+    await settle();
+    const reactivatedItem = statusItem();
+    expect(reactivatedItem.tooltip).toContain('ready');
+
+    lc.FakeLanguageClient.nextStartError = new Error('old start should not replace the new status');
+    releaseOldStart();
+    await settle();
+
+    expect(reactivatedItem.tooltip).toContain('ready');
+    expect(reactivatedItem.tooltip).not.toContain('old start should not replace the new status');
+    expect(fakeVscode.recorded.errors).toEqual([]);
+    expect(unhandled).toEqual([]);
+    await ext.deactivate();
+  });
+
+  it('does not repaint a disposed item when a probe resolves late', async () => {
+    let releaseVersion: (value: string) => void = () => {};
+    let releaseDb: (value: { core: string; source: string }) => void = () => {};
+    probes.probeServerVersion.mockImplementationOnce(
+      () => new Promise<string>((resolve) => (releaseVersion = resolve)),
+    );
+    probes.probeTypeDb.mockImplementationOnce(
+      () => new Promise((resolve) => (releaseDb = resolve)),
+    );
+    const ext = await loadExtension();
+    ext.activate(makeContext() as never);
+    await settle();
+    const item = statusItem();
+    await ext.deactivate();
+    const paintsAtDisposal = item.shownCount;
+
+    releaseVersion('too-late');
+    releaseDb({ core: 'too-late', source: `${homedir()}/too-late` });
+    await settle();
+
     expect(item.shownCount).toBe(paintsAtDisposal);
     expect(unhandled).toEqual([]);
   });

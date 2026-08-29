@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { abbreviateAll, abbreviateHome } from '../src/paths';
+import { abbreviateAll, abbreviateHome, abbreviateHomeInText } from '../src/paths';
 
 /**
  * `showStatus` output is written to be pasted into a public issue, so the
@@ -67,5 +67,53 @@ describe('abbreviateAll', () => {
 
   it('returns an empty list for undefined', () => {
     expect(abbreviateAll(undefined, '/home/max', 'linux')).toEqual([]);
+  });
+});
+
+describe('abbreviateHomeInText', () => {
+  it('redacts home paths embedded in diagnostics without mangling siblings', () => {
+    expect(
+      abbreviateHomeInText(
+        'spawn failed for /home/max/bin/openplanet-lsp; retry /home/maxwell/bin/openplanet-lsp',
+        ['/home/max/'],
+        'linux',
+      ),
+    ).toBe('spawn failed for ~/bin/openplanet-lsp; retry /home/maxwell/bin/openplanet-lsp');
+  });
+
+  it('redacts every occurrence of the same home path in one diagnostic', () => {
+    expect(
+      abbreviateHomeInText(
+        'read /home/max/.config/openplanet after spawning /home/max/bin/openplanet-lsp',
+        ['/home/max'],
+        'linux',
+      ),
+    ).toBe('read ~/.config/openplanet after spawning ~/bin/openplanet-lsp');
+  });
+
+  it('redacts a home path when diagnostics render it as a file URI', () => {
+    expect(
+      abbreviateHomeInText('failed to read file:///home/max/src/Main.as', ['/home/max'], 'linux'),
+    ).toBe('failed to read file://~/src/Main.as');
+  });
+
+  it('redacts Windows aliases case-insensitively with either separator', () => {
+    expect(
+      abbreviateHomeInText(
+        'spawn C:/USERS/max/bin/openplanet-lsp.exe failed',
+        ['C:\\Users\\Max'],
+        'win32',
+      ),
+    ).toBe('spawn ~/bin/openplanet-lsp.exe failed');
+  });
+
+  it('redacts a canonical home alias when HOME itself is a symlink', () => {
+    expect(
+      abbreviateHomeInText(
+        'type DB read from /physical/users/max/OpenplanetNext',
+        ['/home/max-link', '/physical/users/max'],
+        'linux',
+      ),
+    ).toBe('type DB read from ~/OpenplanetNext');
   });
 });

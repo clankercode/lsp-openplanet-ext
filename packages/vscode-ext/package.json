@@ -33,7 +33,11 @@
   },
   "activationEvents": [
     "onLanguage:angelscript",
-    "workspaceContains:**/info.toml"
+    "workspaceContains:**/info.toml",
+    "onCommand:openplanetLsp.restart",
+    "onCommand:openplanetLsp.restartVerbose",
+    "onCommand:openplanetLsp.showLogs",
+    "onCommand:openplanetLsp.showStatus"
   ],
   "contributes": {
     "languages": [
@@ -94,7 +98,7 @@
         "openplanetLsp.serverPath": {
           "type": "string",
           "default": "",
-          "description": "Absolute path to the openplanet-lsp binary. Leave empty to use the bundled binary (when available) or the first `openplanet-lsp` on PATH."
+          "description": "Absolute path to the openplanet-lsp binary. Leave empty to use the bundled binary (when available) or the first `openplanet-lsp` on PATH. When set, this exact path is used; an invalid path fails visibly instead of falling back."
         },
         "openplanetLsp.openplanetDir": {
           "type": "string",

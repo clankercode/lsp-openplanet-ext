@@ -9,7 +9,7 @@
  * Adding a field here is adding it to a public paste.
  */
 
-import { abbreviateAll, abbreviateHome } from './paths';
+import { abbreviateHomeInText } from './paths';
 import type { ServerState, TypeDbInfo } from './status';
 
 export interface StatusReportInput {
@@ -37,6 +37,8 @@ export interface StatusReportInput {
   platform?: string;
   /** Injected so tests do not depend on the runner's home directory. */
   home?: string;
+  /** Logical and physical home paths, so symlinked homes are both safe. */
+  homeAliases?: readonly string[];
 }
 
 const UNSET = '(unset)';
@@ -68,8 +70,12 @@ function typeDbLines(db: TypeDbInfo | undefined): string[] {
  * this INTO a fenced block.
  */
 export function buildStatusReport(input: StatusReportInput): string {
-  const home = input.home;
-  const abbr = (p: string | undefined) => abbreviateHome(p, home, input.platform);
+  const homes = input.homeAliases ?? (input.home ? [input.home] : []);
+  const redact = (value: string | undefined) => abbreviateHomeInText(value, homes, input.platform);
+  const redactAll = (values: readonly string[] | undefined): string[] =>
+    (values ?? [])
+      .filter((value) => value !== undefined && value !== null && value.trim() !== '')
+      .map((value) => redact(value) as string);
 
   const lines: string[] = [
     '# Openplanet LSP status',
@@ -78,40 +84,47 @@ export function buildStatusReport(input: StatusReportInput): string {
     '',
     '## Server',
     '',
-    line('State', input.state),
+    line('State', redact(input.state)),
   ];
 
   if (input.failureReason) {
-    lines.push(line('Failure', input.failureReason));
+    lines.push(line('Failure', redact(input.failureReason)));
   }
 
   lines.push(
-    line('Binary', abbr(input.serverPath)),
-    line('Resolved via', input.serverSource),
-    line('Version', input.serverVersion),
+    line('Binary', redact(input.serverPath)),
+    line('Resolved via', redact(input.serverSource)),
+    line('Version', redact(input.serverVersion)),
     ...typeDbLines(
-      input.typeDb ? { ...input.typeDb, source: abbr(input.typeDb.source) } : undefined,
+      input.typeDb
+        ? {
+            ...input.typeDb,
+            core: redact(input.typeDb.core),
+            game: redact(input.typeDb.game),
+            source: redact(input.typeDb.source),
+          }
+        : undefined,
     ),
     '',
     '## Configuration',
     '',
-    line('Game target', input.gameTarget, UNSET),
-    line('Signature mode', input.signatureMode, UNSET),
-    line('Unused level', input.unused, UNSET),
-    line('Inactive regions', input.inactiveRegions, UNSET),
-    listLine('Extra defines', [...(input.defines ?? [])]),
-    listLine('Plugin roots', abbreviateAll(input.pluginRoots, home, input.platform)),
+    line('Game target', redact(input.gameTarget), UNSET),
+    line('Signature mode', redact(input.signatureMode), UNSET),
+    line('Unused level', redact(input.unused), UNSET),
+    line('Inactive regions', redact(input.inactiveRegions), UNSET),
+    listLine('Extra defines', redactAll(input.defines)),
+    listLine('Plugin roots', redactAll(input.pluginRoots)),
     '',
     '## Workspace',
     '',
-    listLine('Folders', abbreviateAll(input.workspaceFolders, home, input.platform)),
-    line('Active editor root', abbr(input.activeWorkspaceRoot), NONE),
+    listLine('Folders', redactAll(input.workspaceFolders)),
+    line('Active editor root', redact(input.activeWorkspaceRoot), NONE),
     '',
     '## Environment',
     '',
-    line('Extension', input.extensionVersion),
-    line('VS Code', input.vscodeVersion),
-    line('Platform', input.platform),
+    line('Extension', redact(input.extensionVersion)),
+    line('VS Code', redact(input.vscodeVersion)),
+    line('Platform', redact(input.platform)),
   );
 
   return lines.join('\n') + '\n';

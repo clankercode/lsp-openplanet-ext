@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'path';
 import {
@@ -10,7 +10,7 @@ import {
   TransportKind,
 } from 'vscode-languageclient/node';
 import { buildInitializationOptions, type OpenplanetLspSettings } from './settings';
-import { abbreviateHome } from './paths';
+import { abbreviateHome, abbreviateHomeInText } from './paths';
 import { renderStatusBar, type StatusInfo } from './status';
 import { buildStatusReport } from './statusReport';
 import { probeServerVersion, probeTypeDb } from './serverProbe';
@@ -19,6 +19,8 @@ let client: LanguageClient | undefined;
 let outputChannel: vscode.OutputChannel | undefined;
 let statusItem: vscode.StatusBarItem | undefined;
 let clientStateSub: vscode.Disposable | undefined;
+/** Debounced configuration restart; owned by this activation lifecycle. */
+let restartTimer: ReturnType<typeof setTimeout> | undefined;
 
 /** Everything the status bar and the status document render from. */
 let status: StatusInfo = { state: 'starting' };
@@ -33,6 +35,9 @@ let resolvedServerPath: string | undefined;
  * a state event that lands after disposal must not resurrect the status item.
  */
 let deactivated = false;
+
+/** Invalidates stale starts, probes and state events across every lifecycle. */
+let startGeneration = 0;
 
 /** Serialize restarts: never run two stop->start chains concurrently. */
 let restarting = false;
@@ -61,6 +66,30 @@ function homeDir(): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+/** Logical HOME plus the physical path when HOME is a symlink. */
+function homeAliases(home = homeDir()): string[] {
+  if (!home) return [];
+  try {
+    const physical = realpathSync(home);
+    return physical === home ? [home] : [home, physical];
+  } catch {
+    return [home];
+  }
+}
+
+function redactHome(text: string | undefined, home = homeDir()): string | undefined {
+  return abbreviateHomeInText(text, homeAliases(home));
+}
+
+function isCurrentStart(generation: number, candidate?: LanguageClient): boolean {
+  return !deactivated && startGeneration === generation && (!candidate || client === candidate);
+}
+
+function clearRestartTimer(): void {
+  if (restartTimer) clearTimeout(restartTimer);
+  restartTimer = undefined;
 }
 
 /**
@@ -100,10 +129,8 @@ function paintStatus(): void {
 /**
  * Resolve the server binary.
  *
- * Order: serverPath setting (if it exists on disk) -> bundled extension
- * bin/ -> bare `openplanet-lsp` (resolved from PATH by the spawn itself).
- * A serverPath that is set but missing warns and falls through - a silent
- * hard failure would strand users who rename a binary. Unset settings
+ * Order: serverPath setting (authoritative) -> bundled extension bin/ -> bare
+ * `openplanet-lsp` (resolved from PATH by the spawn itself). Unset settings
  * forward nothing so the workspace's .openplanet-lsp.toml keeps precedence
  * (see settings.ts).
  */
@@ -133,6 +160,8 @@ function resolveServerCommand(settings: OpenplanetLspSettings, extensionPath: st
           );
         }
       });
+    serverSource = 'openplanetLsp.serverPath setting (missing)';
+    return override;
   }
 
   // 2. Bundled binary (per-platform VSIX builds drop it here).
@@ -149,7 +178,7 @@ function resolveServerCommand(settings: OpenplanetLspSettings, extensionPath: st
 
   // 3. Bare command - the OS resolves it from PATH at spawn time.
   log('no override and no bundled binary; spawning bare "openplanet-lsp" (PATH)');
-  serverSource = override ? 'PATH (serverPath override was missing)' : 'PATH';
+  serverSource = 'PATH';
   return 'openplanet-lsp';
 }
 
@@ -160,32 +189,37 @@ function resolveServerCommand(settings: OpenplanetLspSettings, extensionPath: st
  * over LSP, and the status bar must never poll. Failures are silent - the
  * tooltip then says "unknown", which is itself a useful signal.
  */
-function probeBinary(bin: string): void {
+function probeBinary(bin: string, generation: number): void {
   const home = homeDir();
   void probeServerVersion(bin).then((serverVersion) => {
-    if (!deactivated && serverVersion) setStatus({ serverVersion });
+    if (isCurrentStart(generation) && serverVersion) setStatus({ serverVersion });
   });
   void probeTypeDb(bin).then((db) => {
-    if (deactivated || !db) return;
-    setStatus({ typeDb: { ...db, source: abbreviateHome(db.source, home) } });
+    if (!isCurrentStart(generation) || !db) return;
+    setStatus({ typeDb: { ...db, source: redactHome(db.source, home) } });
   });
 }
 
-async function startClient(context: vscode.ExtensionContext): Promise<void> {
+async function startClient(
+  context: vscode.ExtensionContext,
+  generation = ++startGeneration,
+): Promise<void> {
+  if (!isCurrentStart(generation)) return;
   const settings = readSettings();
   const serverBin = resolveServerCommand(settings, context.extensionPath);
+  if (!isCurrentStart(generation)) return;
   resolvedServerPath = serverBin;
 
   const home = homeDir();
   setStatus({
-    serverPath: abbreviateHome(serverBin, home),
+    serverPath: redactHome(serverBin, home),
     gameTarget: settings.gameTarget,
     workspaceRoot: abbreviateHome(activeWorkspaceRoot(), home),
     // A previous run's versions would be a lie about the binary now starting.
     serverVersion: undefined,
     typeDb: undefined,
   });
-  probeBinary(serverBin);
+  probeBinary(serverBin, generation);
 
   const serverOptions: ServerOptions = {
     command: serverBin,
@@ -227,8 +261,19 @@ async function startClient(context: vscode.ExtensionContext): Promise<void> {
     initializationOptions,
   };
 
-  client = new LanguageClient('openplanet-lsp', 'Openplanet LSP', serverOptions, clientOptions);
-  context.subscriptions.push(client);
+  if (!isCurrentStart(generation)) return;
+  const newClient = new LanguageClient(
+    'openplanet-lsp',
+    'Openplanet LSP',
+    serverOptions,
+    clientOptions,
+  );
+  if (!isCurrentStart(generation)) {
+    newClient.dispose();
+    return;
+  }
+  client = newClient;
+  context.subscriptions.push(newClient);
 
   // The status bar is driven entirely from this event plus the start()
   // rejection below. No timers, no polling.
@@ -237,8 +282,8 @@ async function startClient(context: vscode.ExtensionContext): Promise<void> {
   // list for the life of the window. The previous sub is disposed here and
   // the last one in deactivate().
   clientStateSub?.dispose();
-  clientStateSub = client.onDidChangeState((e) => {
-    if (deactivated) return;
+  clientStateSub = newClient.onDidChangeState((e) => {
+    if (!isCurrentStart(generation, newClient)) return;
     if (e.newState === State.Running) {
       setStatus({ state: 'ready', failureReason: undefined });
     } else if (e.newState === State.Starting) {
@@ -261,8 +306,10 @@ async function startClient(context: vscode.ExtensionContext): Promise<void> {
   });
 
   try {
-    await client.start();
+    await newClient.start();
+    if (!isCurrentStart(generation, newClient)) return;
   } catch (err) {
+    if (!isCurrentStart(generation, newClient)) return;
     const detail = err instanceof Error ? err.message : String(err);
     outputChannel?.appendLine(`[error] failed to start server: ${detail}`);
     setStatus({ state: 'failed', failureReason: detail });
@@ -287,7 +334,8 @@ async function startClient(context: vscode.ExtensionContext): Promise<void> {
 }
 
 async function restartClient(context: vscode.ExtensionContext): Promise<void> {
-  if (restarting) return;
+  if (deactivated || restarting) return;
+  const generation = ++startGeneration;
   restarting = true;
   setStatus({ state: 'restarting', failureReason: undefined });
   try {
@@ -299,9 +347,10 @@ async function restartClient(context: vscode.ExtensionContext): Promise<void> {
       await old.stop().catch(() => {});
       old.dispose();
     }
-    await startClient(context);
+    if (!isCurrentStart(generation)) return;
+    await startClient(context, generation);
   } finally {
-    restarting = false;
+    if (startGeneration === generation) restarting = false;
   }
 }
 
@@ -329,6 +378,7 @@ function collectStatusReport(context: vscode.ExtensionContext): string {
     vscodeVersion: vscode.version,
     platform: process.platform,
     home,
+    homeAliases: homeAliases(home),
   });
 }
 
@@ -341,6 +391,8 @@ function collectStatusReport(context: vscode.ExtensionContext): string {
  * no longer exists.
  */
 function resetModuleState(): void {
+  clearRestartTimer();
+  startGeneration += 1;
   client = undefined;
   outputChannel = undefined;
   statusItem = undefined;
@@ -410,12 +462,13 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // Settings are initialize-time only on the server (no didChangeConfiguration
   // handler there) - restart the client when they change. Debounced.
-  let restartTimer: ReturnType<typeof setTimeout> | undefined;
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (!e.affectsConfiguration('openplanetLsp')) return;
-      if (restartTimer) clearTimeout(restartTimer);
+      clearRestartTimer();
       restartTimer = setTimeout(() => {
+        restartTimer = undefined;
+        if (deactivated) return;
         outputChannel?.appendLine('[config] openplanetLsp settings changed; restarting server');
         void restartClient(context);
       }, 1000);
@@ -425,6 +478,9 @@ export function activate(context: vscode.ExtensionContext): void {
 
 export function deactivate(): Thenable<void> | undefined {
   deactivated = true;
+  startGeneration += 1;
+  restarting = false;
+  clearRestartTimer();
   clientStateSub?.dispose();
   clientStateSub = undefined;
   statusItem?.dispose();

@@ -75,6 +75,33 @@ describe('buildStatusReport', () => {
     expect(out).toContain('spawn openplanet-lsp ENOENT');
   });
 
+  it('redacts home paths embedded in every diagnostic string', () => {
+    const out = buildStatusReport({
+      ...full,
+      failureReason:
+        'spawn /physical/users/max/.local/bin/openplanet-lsp after reading /home/max/.config/openplanet',
+      serverSource: 'configured at /home/max/.config/Code/settings.json',
+      typeDb: { source: '/physical/users/max/OpenplanetNext' },
+      homeAliases: ['/home/max/', '/physical/users/max'],
+    });
+    expect(out).not.toContain('/home/max');
+    expect(out).not.toContain('/physical/users/max');
+    expect(out).toContain('spawn ~/.local/bin/openplanet-lsp after reading ~/.config/openplanet');
+    expect(out).toContain('configured at ~/.config/Code/settings.json');
+    expect(out).toContain('Type DB source: ~/OpenplanetNext');
+  });
+
+  it('redacts Windows home paths embedded in a failure reason', () => {
+    const out = buildStatusReport({
+      state: 'failed',
+      failureReason: 'spawn C:/USERS/max/bin/openplanet-lsp.exe failed',
+      platform: 'win32',
+      home: 'C:\\Users\\Max\\',
+    });
+    expect(out).not.toContain('USERS/max');
+    expect(out).toContain('spawn ~/bin/openplanet-lsp.exe failed');
+  });
+
   it('degrades to placeholders with nothing resolved and no workspace', () => {
     const out = buildStatusReport({ state: 'starting' });
     expect(out).toContain('unknown');
