@@ -232,6 +232,9 @@ export async function addDefine(log?: Logger): Promise<void> {
   const entries = baseEntriesForScope(inspectDefines(), scope);
   // No derived state is known, so the entry states the wanted state outright.
   const next = applyDefineEdit(entries, { name: parsed.name, on: parsed.on });
+  if (next.length === entries.length && next.every((entry, index) => entry === entries[index])) {
+    return;
+  }
   await writeDefines(scope, next, log);
 }
 

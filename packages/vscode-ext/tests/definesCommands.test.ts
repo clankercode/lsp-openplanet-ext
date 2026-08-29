@@ -259,6 +259,18 @@ describe('addDefine', () => {
     expect(lastWrite()).toEqual(['MYFLAG']);
   });
 
+  it('writes nothing when re-adding an already canonical entry', async () => {
+    for (const entry of ['MYFLAG', '-LOGS']) {
+      fakeVscode.__reset();
+      fakeVscode.__setWorkspaceFolders(['/ws/my-plugin']);
+      fakeVscode.__setConfigScopes({ [KEY]: { workspaceValue: [entry] } });
+      fakeVscode.__queueInputBox(() => entry);
+      queueScope('Workspace');
+      await addDefine();
+      expect(updates(), entry).toHaveLength(0);
+    }
+  });
+
   it('writes nothing when the input box is dismissed', async () => {
     fakeVscode.__queueInputBox(() => undefined);
     await addDefine();
