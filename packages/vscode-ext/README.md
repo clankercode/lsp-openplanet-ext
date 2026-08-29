@@ -27,6 +27,7 @@ channel (_Output → Openplanet LSP_) shows exactly what was tried.
 | `openplanetLsp.signatureMode` | `"developer"` | Signature level whose `SIG_*` defines are live.    |
 | `openplanetLsp.defines`       | `[]`          | Extra preprocessor defines (added, not replaced).  |
 | `openplanetLsp.unused`        | `""`          | How unused declarations are reported.              |
+| `openplanetLsp.inactiveRegions` | `""`        | Grey out `#if` branches your defines switch off.   |
 
 **Precedence:** the server layers configuration as auto-detect → workspace
 `.openplanet-lsp.toml` → user config → VS Code settings. The extension only forwards
@@ -55,6 +56,13 @@ listed), `warn` (the server default), `error`, or `ignore` to turn the pass off.
 the LSP `Unnecessary` tag at all levels, so the declaration is faded regardless of the
 level you pick — VS Code gates that on `editor.showUnused`. Left empty, nothing is sent
 and your `.openplanet-lsp.toml` decides.
+
+`inactiveRegions` greys out `#if` branches that your current defines switch off, the way
+an IDE fades `#if 0` in C — so you can see at a glance which code your `gameTarget` and
+`signatureMode` have turned off. `hint` (the server default) fades without listing;
+`info` also lists in the Problems panel; `ignore` marks nothing. There is deliberately no
+warning/error level, and `openplanet-lsp check` never reports these at all — a branch
+that is off for your target is dead by design, not a defect.
 
 ## Commands
 

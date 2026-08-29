@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `openplanetLsp.inactiveRegions` — grey out `#if` branches your current
+  defines switch off, the way an IDE fades `#if 0` in C, so you can see which
+  code your `gameTarget` / `signatureMode` have turned off. `hint` (the server
+  default) fades without listing, `info` also lists in the Problems panel,
+  `ignore` marks nothing. No warning/error level, and `check` never reports
+  these — the branch is dead by design, not a defect. Forwarded as
+  `inactive_regions`; left empty nothing is sent. Needs the fade to be enabled
+  (`editor.showUnused`, on by default) and openplanet-lsp with server B031.
+
 - `openplanetLsp.unused` — how unused functions / variables / parameters /
   class members are reported: `hint` (greyed out in the editor, kept out of the
   Problems panel), `info` (greyed out and listed), `warn` (the server default),
