@@ -44,6 +44,13 @@ export const NEGATION_PREFIXES = ['-', '!'] as const;
 /** The one this module writes. `!` is an accepted alias, not a second form. */
 export const CANONICAL_NEGATION = '-';
 
+/** Rust's `str::trim` uses Unicode `White_Space`, unlike JavaScript's `trim`. */
+const RUST_TRIM_WHITESPACE = /^\p{White_Space}+|\p{White_Space}+$/gu;
+
+function trimLikeRust(value: string): string {
+  return value.replace(RUST_TRIM_WHITESPACE, '');
+}
+
 /** A valid AngelScript preprocessor identifier — the only thing `#if` can name. */
 const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
@@ -134,12 +141,12 @@ export type ClearPlan = { action: 'noop' } | { action: 'unset' } | { action: 'em
  * server would drop it (empty, whitespace, a bare prefix).
  */
 export function parseDefineEntry(raw: string): ParsedEntry | undefined {
-  const trimmed = raw.trim();
+  const trimmed = trimLikeRust(raw);
   if (trimmed === '') return undefined;
   const negated = (NEGATION_PREFIXES as readonly string[]).includes(trimmed[0]);
   // Exactly one prefix is stripped, matching `strip_prefix(['-', '!'])`:
   // `--LOGS` removes a define literally named `-LOGS`.
-  const name = (negated ? trimmed.slice(1) : trimmed).trim();
+  const name = trimLikeRust(negated ? trimmed.slice(1) : trimmed);
   if (name === '') return undefined;
   return { raw, name, on: !negated };
 }

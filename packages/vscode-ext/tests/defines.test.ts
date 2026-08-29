@@ -63,6 +63,29 @@ describe('parseDefineEntry', () => {
     expect(parseDefineEntry('dev')?.name).toBe('dev');
     expect(parseDefineEntry('DEV')?.name).toBe('DEV');
   });
+
+  it('matches Rust trimming for NEL, including after a negation prefix', () => {
+    expect(parseDefineEntry('\u0085')).toBeUndefined();
+    expect(parseDefineEntry('\u0085NAME\u0085')).toEqual({
+      raw: '\u0085NAME\u0085',
+      name: 'NAME',
+      on: true,
+    });
+    expect(parseDefineEntry('-\u0085NAME')).toEqual({
+      raw: '-\u0085NAME',
+      name: 'NAME',
+      on: false,
+    });
+  });
+
+  it('preserves byte-order marks because Rust does not trim them', () => {
+    expect(parseDefineEntry('\uFEFF')).toEqual({ raw: '\uFEFF', name: '\uFEFF', on: true });
+    expect(parseDefineEntry('\uFEFFNAME\uFEFF')).toEqual({
+      raw: '\uFEFFNAME\uFEFF',
+      name: '\uFEFFNAME\uFEFF',
+      on: true,
+    });
+  });
 });
 
 describe('parseDefineEntries', () => {
