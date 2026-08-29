@@ -60,6 +60,14 @@ export interface ResolvedDefinesResult {
    * `settings.ts` whenever the server answers.
    */
   platformFamilies: string[][];
+  /**
+   * Absolute path of the plugin workspace the answer is scoped to, when the
+   * server is serving one. `undefined` means the answer is the window-wide
+   * config — which the server only returns when it is serving NO plugin
+   * workspace, because with several live it refuses an unscopable uri rather
+   * than hand back some other plugin's set.
+   */
+  root?: string;
 }
 
 /**
@@ -120,6 +128,7 @@ export function parseResolvedDefines(payload: unknown): ResolvedDefinesResult | 
     defines,
     gameTarget: typeof payload.gameTarget === 'string' ? payload.gameTarget : '',
     platformFamilies: families,
+    root: typeof payload.root === 'string' && payload.root !== '' ? payload.root : undefined,
   };
 }
 

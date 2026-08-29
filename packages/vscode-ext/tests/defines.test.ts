@@ -216,6 +216,105 @@ describe('applyDefineEdit', () => {
   });
 });
 
+/**
+ * B050: the one case where "no override" does not mean "derived state".
+ *
+ * A plain foreign selector makes the server replace the target's selectors
+ * (GH #36), so a target-family define can be derived-on and still OFF because
+ * another entry suppresses it. The minimal write would then be a silent
+ * no-op: the user checks the row, a settings write happens, nothing changes.
+ */
+describe('applyDefineEdit with a suppressing foreign selector', () => {
+  const FAMILIES: readonly (readonly string[])[] = [['TMNEXT'], ['MP4', 'MP40', 'MP41'], ['TURBO']];
+
+  it('writes the explicit entry instead of a no-op minimal write', () => {
+    // Without this, the result is `['MP4']` again and TMNEXT stays off.
+    expect(
+      applyDefineEdit(['MP4'], {
+        name: 'TMNEXT',
+        on: true,
+        derivedOn: true,
+        gameTarget: 'TMNEXT',
+        platformFamilies: FAMILIES,
+      }),
+    ).toEqual(['MP4', 'TMNEXT']);
+  });
+
+  it('never deletes the other define’s entry', () => {
+    // The foreign row is still CHECKED in the QuickPick — the user did not
+    // ask for it to go — and this module preserves entries for other defines
+    // verbatim. Both end up on, which is exactly what the picker showed.
+    const out = applyDefineEdit(['KEEP', 'MP4', '-LOGS'], {
+      name: 'TMNEXT',
+      on: true,
+      derivedOn: true,
+      gameTarget: 'TMNEXT',
+      platformFamilies: FAMILIES,
+    });
+    expect(out).toContain('MP4');
+    expect(out).toContain('KEEP');
+    expect(out).toContain('-LOGS');
+    expect(out).toContain('TMNEXT');
+  });
+
+  it('still writes minimally when the foreign selector is NEGATED', () => {
+    // `-MP4` is a removal; the server builds its `foreign` list from the ADDS
+    // bucket only, so nothing is suppressed and the shortcut is safe.
+    expect(
+      applyDefineEdit(['-MP4', '-TMNEXT'], {
+        name: 'TMNEXT',
+        on: true,
+        derivedOn: true,
+        gameTarget: 'TMNEXT',
+        platformFamilies: FAMILIES,
+      }),
+    ).toEqual(['-MP4']);
+  });
+
+  it('still writes minimally for a SAME-family selector', () => {
+    // `MP40` under `MP4` is not foreign, so it triggers no replacement.
+    expect(
+      applyDefineEdit(['MP40', '-MP41'], {
+        name: 'MP41',
+        on: true,
+        derivedOn: true,
+        gameTarget: 'MP4',
+        platformFamilies: FAMILIES,
+      }),
+    ).toEqual(['MP40']);
+  });
+
+  it('still writes minimally for a non-selector define', () => {
+    // A foreign selector suppresses selectors, not `LOGS`.
+    expect(
+      applyDefineEdit(['MP4', '-LOGS'], {
+        name: 'LOGS',
+        on: true,
+        derivedOn: true,
+        gameTarget: 'TMNEXT',
+        platformFamilies: FAMILIES,
+      }),
+    ).toEqual(['MP4']);
+  });
+
+  it('is inert when turning a selector OFF', () => {
+    // Only re-enabling can hit the no-op; a disable always writes `-NAME`.
+    expect(
+      applyDefineEdit(['MP4'], {
+        name: 'TMNEXT',
+        on: false,
+        derivedOn: true,
+        gameTarget: 'TMNEXT',
+        platformFamilies: FAMILIES,
+      }),
+    ).toEqual(['MP4', '-TMNEXT']);
+  });
+
+  it('is inert offline, where no minimal write is attempted anyway', () => {
+    expect(applyDefineEdit(['MP4'], { name: 'TMNEXT', on: true })).toEqual(['MP4', 'TMNEXT']);
+  });
+});
+
 describe('applyDefineEdits', () => {
   it('applies a whole batch in one pass', () => {
     expect(

@@ -557,6 +557,65 @@ describe('manageDefines with server introspection', () => {
     expect(gone?.description).toContain('not installed');
   });
 
+  it('names the plugin the answer is scoped to in the title', async () => {
+    serve(serverAnswer({ root: '/ws/my-plugin/alpha' }));
+    queueScope('Workspace');
+    queuePicks(() => true);
+    await manageDefines();
+    // A multi-root window has a DIFFERENT define set per plugin, so an
+    // unlabelled list would be exactly the partial truth B050 exists to end.
+    const title = fakeVscode.recorded.quickPicks[1].options?.title ?? '';
+    expect(title).toContain('alpha');
+    expect(title).toContain('TMNEXT');
+  });
+
+  it('omits the plugin name when the server did not scope the answer', async () => {
+    serve(serverAnswer());
+    queueScope('Workspace');
+    queuePicks(() => true);
+    await manageDefines();
+    const title = fakeVscode.recorded.quickPicks[1].options?.title ?? '';
+    expect(title).toContain('TMNEXT');
+    expect(title).not.toContain('·');
+  });
+
+  it('degrades when the server refuses an uri it cannot scope', async () => {
+    // Several plugin workspaces live and the active editor is in none of
+    // them: the server rejects rather than hand back another plugin's set,
+    // and the UI falls back to overrides-only.
+    setResolvedDefinesProvider(async () => undefined);
+    fakeVscode.__setConfigScopes({ [KEY]: { workspaceValue: ['DEV'] } });
+    queueScope('Workspace');
+    queuePicks(() => false);
+    await manageDefines();
+    expect(lastWrite()).toEqual(['-DEV']);
+  });
+
+  it('re-checking a target selector suppressed by a foreign one actually turns it on', async () => {
+    // `defines: ["MP4"]` under game_target TMNEXT: the server REPLACES the
+    // target's selectors, so TMNEXT is derived-on but currently OFF. The
+    // minimal write (drop TMNEXT's override — there is none) would leave the
+    // array untouched: the user checks the row, one settings write happens,
+    // and nothing changes.
+    serve(
+      serverAnswer({
+        defines: [
+          { name: 'TMNEXT', active: false, origin: 'target', derivedActive: true },
+          { name: 'MP4', active: true, origin: 'user', derivedActive: false },
+        ],
+      }),
+    );
+    fakeVscode.__setConfigScopes({ [KEY]: { workspaceValue: ['MP4'] } });
+    queueScope('Workspace');
+    queuePicks(() => true); // check TMNEXT; MP4 was already checked
+    await manageDefines();
+    const written = lastWrite() as string[];
+    expect(written).toContain('TMNEXT');
+    // MP4's row is still checked, so its entry stays: this UI does not delete
+    // an entry the user did not uncheck.
+    expect(written).toContain('MP4');
+  });
+
   it('scopes the request to the active editor', async () => {
     const calls = serve();
     fakeVscode.__setActiveEditor('/ws/my-plugin/src/Main.as');

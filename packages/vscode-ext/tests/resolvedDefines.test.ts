@@ -109,7 +109,19 @@ describe('parseResolvedDefines', () => {
 
   it('tolerates a missing gameTarget and platformFamilies', () => {
     const parsed = parseResolvedDefines({ defines: [] });
-    expect(parsed).toEqual({ defines: [], gameTarget: '', platformFamilies: [] });
+    expect(parsed).toEqual({
+      defines: [],
+      gameTarget: '',
+      platformFamilies: [],
+      root: undefined,
+    });
+  });
+
+  it('carries the scoping root, and treats a blank one as absent', () => {
+    expect(parseResolvedDefines({ defines: [], root: '/ws/alpha' })?.root).toBe('/ws/alpha');
+    for (const root of [undefined, '', 42, null]) {
+      expect(parseResolvedDefines({ defines: [], root })?.root).toBeUndefined();
+    }
   });
 
   it('drops non-string and empty families', () => {

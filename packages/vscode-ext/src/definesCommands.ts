@@ -62,6 +62,13 @@ import {
 import { requestResolvedDefines, type ResolvedDefinesProvider } from './resolvedDefines';
 import type { PlatformFamilies } from './settings';
 
+/** Last path segment of an absolute plugin root, for display. */
+function basename(p: string): string {
+  const trimmed = p.replace(/[\\/]+$/, '');
+  const cut = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
+  return cut === -1 ? trimmed : trimmed.slice(cut + 1);
+}
+
 const SECTION = 'openplanetLsp';
 const KEY = 'defines';
 
@@ -267,12 +274,17 @@ export async function manageDefines(log?: Logger): Promise<void> {
   // `.openplanet-lsp.toml` can set a target the setting never mentions.
   const target = resolved?.gameTarget || gameTarget();
   const families = resolved?.platformFamilies;
+  // Name the plugin the answer is scoped to. In a multi-root window the
+  // define sets genuinely differ per plugin, and an unlabelled list would be
+  // the same "partial truth with no indication it is partial" this feature
+  // exists to end.
+  const plugin = resolved?.root ? `${basename(resolved.root)} · ` : '';
   const picked = await vscode.window.showQuickPick(
     rows.map((row) => rowItem(row, target, families)),
     {
       canPickMany: true,
       title: resolved
-        ? `Manage Defines (${scopeLabel(scope)} scope, ${target})`
+        ? `Manage Defines (${scopeLabel(scope)} scope, ${plugin}${target})`
         : `Manage Defines (${scopeLabel(scope)} overrides)`,
       placeHolder: resolved
         ? 'Checked = on. Unchecking writes -NAME; use Remove Define to delete an entry instead.'
@@ -285,7 +297,16 @@ export async function manageDefines(log?: Logger): Promise<void> {
   const wantedOn = new Set(picked.map((item) => item.row.name));
   const edits: DefineEdit[] = rows
     .filter((row) => wantedOn.has(row.name) !== row.active)
-    .map((row) => ({ name: row.name, on: !row.active, derivedOn: row.derivedOn }));
+    .map((row) => ({
+      name: row.name,
+      on: !row.active,
+      derivedOn: row.derivedOn,
+      // Only a server answer carries a resolved target and family table. The
+      // offline path leaves `derivedOn` undefined, so it never takes the
+      // minimal-write shortcut this guards.
+      gameTarget: resolved?.gameTarget,
+      platformFamilies: resolved?.platformFamilies,
+    }));
   if (edits.length === 0) return;
 
   await writeDefines(scope, applyDefineEdits(entries, edits), log);
@@ -342,6 +363,8 @@ export async function addDefine(log?: Logger, presetScope?: DefinesScope): Promi
     name: parsed.name,
     on: parsed.on,
     derivedOn: derived.get(parsed.name),
+    gameTarget: resolved?.gameTarget,
+    platformFamilies: resolved?.platformFamilies,
   });
   if (next.length === entries.length && next.every((entry, index) => entry === entries[index])) {
     // Nothing to write. With a server answer that is usually because the

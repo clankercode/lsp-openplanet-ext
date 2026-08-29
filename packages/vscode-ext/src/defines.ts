@@ -101,6 +101,15 @@ export interface DefineEdit {
    * entry being written. `undefined` = unknown, so an explicit entry is used.
    */
   derivedOn?: boolean;
+  /**
+   * The server's RESOLVED game target, when it supplied `derivedOn`. Needed
+   * to spot the one case where "no override" does not mean "derived state" —
+   * see {@link applyDefineEdit}. Absent on the offline path, where no minimal
+   * write is attempted anyway.
+   */
+  gameTarget?: string;
+  /** The server's selector families, paired with {@link gameTarget}. */
+  platformFamilies?: PlatformFamilies;
 }
 
 /**
@@ -201,7 +210,9 @@ export function formatDefineEntry(name: string, on: boolean): string {
  */
 export function applyDefineEdit(entries: readonly string[], edit: DefineEdit): string[] {
   const replacement =
-    edit.derivedOn !== undefined && edit.derivedOn === edit.on
+    edit.derivedOn !== undefined &&
+    edit.derivedOn === edit.on &&
+    !isSuppressedSelector(entries, edit)
       ? undefined
       : formatDefineEntry(edit.name, edit.on);
 
@@ -219,6 +230,41 @@ export function applyDefineEdit(entries: readonly string[], edit: DefineEdit): s
   }
   if (replacement !== undefined && !placed) out.push(replacement);
   return out;
+}
+
+/**
+ * True when dropping this define's override would be a SILENT NO-OP.
+ *
+ * The minimal write rests on "no entry ⇒ derived state". Exactly one rule
+ * breaks that: a plain (positive) platform selector from another generation
+ * makes the server REPLACE the target's selectors (GH #36 / B024), so a
+ * target-family define can be derived-on and still be off because a DIFFERENT
+ * entry is suppressing it. Removing this define's own override — there may
+ * not even be one — would then leave the row exactly as it was: the user
+ * checks it, one settings write happens, and nothing changes.
+ *
+ * The answer is to write the explicit entry, which the server honours: adds
+ * are applied after the replacement, so a listed selector survives it.
+ *
+ * What this deliberately does NOT do is delete the foreign entry. Its row is
+ * still checked — the user did not ask for it to go — and this module's
+ * contract is that entries for other defines are preserved verbatim. The
+ * result is the state the QuickPick actually shows: both selectors on, with
+ * the ⚠ caution already on the foreign row explaining the hazard.
+ *
+ * Needs the SERVER's target and family table; with neither (the offline path)
+ * `derivedOn` is `undefined` and no minimal write is attempted anyway.
+ */
+function isSuppressedSelector(entries: readonly string[], edit: DefineEdit): boolean {
+  if (!edit.on || edit.derivedOn !== true || !edit.gameTarget) return false;
+  const family = platformFamilyFor(edit.gameTarget, edit.platformFamilies);
+  if (!family?.includes(edit.name)) return false;
+  return parseDefineEntries(entries).some(
+    (entry) =>
+      entry.on &&
+      isPlatformSelector(entry.name, edit.platformFamilies) &&
+      !family.includes(entry.name),
+  );
 }
 
 /**
