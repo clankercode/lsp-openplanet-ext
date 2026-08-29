@@ -3,8 +3,10 @@ import {
   buildInitializationOptions,
   isValidGameTarget,
   isValidSignatureMode,
+  isValidUnusedLevel,
   GAME_TARGETS,
   SIGNATURE_MODES,
+  UNUSED_LEVELS,
 } from '../src/settings.js';
 
 describe('buildInitializationOptions', () => {
@@ -142,5 +144,50 @@ describe('signatureMode (GH #64)', () => {
         defines: ['DEV'],
       }),
     ).toEqual({ game_target: 'MP4', signature_mode: 'official', defines: ['DEV'] });
+  });
+});
+
+describe('unused level (server B030)', () => {
+  it('forwards each documented level verbatim', () => {
+    for (const level of UNUSED_LEVELS) {
+      expect(buildInitializationOptions({ unused: level })).toEqual({ unused: level });
+    }
+  });
+
+  it('omits an unset / empty / whitespace value so the repo config keeps control', () => {
+    // Unlike gameTarget there is no "default" sentinel to skip: the setting's
+    // own default is '', which means "do not send anything". Forwarding
+    // 'warn' when the user never chose it would override a
+    // .openplanet-lsp.toml that pins unused = "ignore".
+    expect(buildInitializationOptions({})).toEqual({});
+    expect(buildInitializationOptions({ unused: '' })).toEqual({});
+    expect(buildInitializationOptions({ unused: '   ' })).toEqual({});
+  });
+
+  it('forwards warn when the user picks it explicitly', () => {
+    expect(buildInitializationOptions({ unused: 'warn' })).toEqual({ unused: 'warn' });
+  });
+
+  it('omits an unknown level rather than sending garbage', () => {
+    for (const bad of ['banana', 'HINT', 'grey', 'true']) {
+      expect(buildInitializationOptions({ unused: bad })).toEqual({});
+    }
+  });
+
+  it('validates the canonical set only', () => {
+    for (const level of UNUSED_LEVELS) expect(isValidUnusedLevel(level)).toBe(true);
+    expect(isValidUnusedLevel('banana')).toBe(false);
+    expect(isValidUnusedLevel('')).toBe(false);
+    expect(UNUSED_LEVELS).toEqual(['ignore', 'hint', 'info', 'warn', 'error']);
+  });
+
+  it('rides alongside the other keys', () => {
+    expect(
+      buildInitializationOptions({
+        gameTarget: 'MP4',
+        unused: 'hint',
+        defines: ['DEV'],
+      }),
+    ).toEqual({ game_target: 'MP4', unused: 'hint', defines: ['DEV'] });
   });
 });

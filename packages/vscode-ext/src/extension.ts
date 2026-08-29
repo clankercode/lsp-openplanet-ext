@@ -23,6 +23,7 @@ function readSettings(): OpenplanetLspSettings {
     signatureMode: config.get<string>('signatureMode', 'developer'),
     defines: config.get<string[]>('defines', []),
     pluginRoots: config.get<string[]>('pluginRoots', []),
+    unused: config.get<string>('unused', ''),
   };
 }
 
