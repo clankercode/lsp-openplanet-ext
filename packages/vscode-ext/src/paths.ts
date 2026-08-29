@@ -76,6 +76,20 @@ function isPathComponentCharacter(ch: string, platform: string): boolean {
 }
 
 /**
+ * A POSIX filename may contain punctuation, but diagnostic prose routinely
+ * terminates an otherwise-complete path with it. Only treat punctuation as a
+ * boundary when its following context is prose too, so `/home/max.backup`
+ * remains a sibling path while `/home/max. Retry` is redacted.
+ */
+function isTerminalProsePunctuation(text: string, index: number): boolean {
+  const punctuation = text[index];
+  if (punctuation === undefined || !/[.,;:!?\)\]\}"']/.test(punctuation)) return false;
+
+  const next = text[index + 1];
+  return next === undefined || /\s/.test(next) || /[\)\]\}"']/.test(next);
+}
+
+/**
  * Redact every home-path occurrence in diagnostic prose.
  *
  * `abbreviateHome` deliberately only accepts a complete path. Server errors
@@ -119,7 +133,10 @@ export function abbreviateHomeInText(
       // A home directory can end a path in diagnostic prose too: "failed to
       // open /home/max (EACCES)". Keep word-like continuations guarded so a
       // sibling such as /home/maxwell is never partially replaced.
-      const endsOnBoundary = after === undefined || !isPathComponentCharacter(after, platform);
+      const endsOnBoundary =
+        after === undefined ||
+        !isPathComponentCharacter(after, platform) ||
+        isTerminalProsePunctuation(result, end);
 
       if (startsOnBoundary && endsOnBoundary) {
         redacted += result.slice(cursor, index) + '~';

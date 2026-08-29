@@ -107,20 +107,47 @@ describe('abbreviateHomeInText', () => {
     ).toBe('spawn ~/bin/openplanet-lsp.exe failed');
   });
 
-  it('redacts standalone home aliases before prose punctuation without matching siblings', () => {
-    expect(abbreviateHomeInText('failed to open /home/max (EACCES)', ['/home/max'], 'linux')).toBe(
-      'failed to open ~ (EACCES)',
+  it('redacts standalone home aliases before terminal prose punctuation without matching siblings', () => {
+    expect(
+      abbreviateHomeInText(
+        'failed to open /home/max. Retry after fixing permissions.',
+        ['/home/max'],
+        'linux',
+      ),
+    ).toBe('failed to open ~. Retry after fixing permissions.');
+    expect(
+      abbreviateHomeInText('failed to open /home/max, retry later', ['/home/max'], 'linux'),
+    ).toBe('failed to open ~, retry later');
+    expect(abbreviateHomeInText('failed to open (/home/max)', ['/home/max'], 'linux')).toBe(
+      'failed to open (~)',
     );
     expect(
       abbreviateHomeInText(
-        'failed to open C:\\Users\\Max: access denied',
+        'failed to open C:\\Users\\Max, retry later',
         ['C:\\Users\\Max'],
         'win32',
       ),
-    ).toBe('failed to open ~: access denied');
+    ).toBe('failed to open ~, retry later');
+    expect(abbreviateHomeInText('failed to open (C:/Users/Max)', ['C:\\Users\\Max'], 'win32')).toBe(
+      'failed to open (~)',
+    );
     expect(
       abbreviateHomeInText('failed to open /home/maxwell (EACCES)', ['/home/max'], 'linux'),
     ).toBe('failed to open /home/maxwell (EACCES)');
+    expect(
+      abbreviateHomeInText(
+        'failed to open C:/Users/Maxwell, retry later',
+        ['C:\\Users\\Max'],
+        'win32',
+      ),
+    ).toBe('failed to open C:/Users/Maxwell, retry later');
+    expect(
+      abbreviateHomeInText(
+        'failed to open C:/Users/Max. Retry after fixing permissions.',
+        ['C:\\Users\\Max'],
+        'win32',
+      ),
+    ).toBe('failed to open ~. Retry after fixing permissions.');
   });
 
   it('does not redact hyphenated sibling paths on POSIX or Windows', () => {
@@ -138,6 +165,23 @@ describe('abbreviateHomeInText', () => {
         'win32',
       ),
     ).toBe('failed to open C:\\Users\\Max-backup: access denied; retry ~\\bin\\openplanet-lsp.exe');
+  });
+
+  it('keeps ordinary dotted sibling names intact while redacting continued child paths', () => {
+    expect(
+      abbreviateHomeInText(
+        'failed to open /home/max.backup; retry /home/max/bin/openplanet-lsp',
+        ['/home/max'],
+        'linux',
+      ),
+    ).toBe('failed to open /home/max.backup; retry ~/bin/openplanet-lsp');
+    expect(
+      abbreviateHomeInText(
+        'failed to open C:\\Users\\Max.backup; retry C:\\Users\\Max\\bin\\openplanet-lsp.exe',
+        ['C:\\Users\\Max'],
+        'win32',
+      ),
+    ).toBe('failed to open C:\\Users\\Max.backup; retry ~\\bin\\openplanet-lsp.exe');
   });
 
   it('redacts a canonical home alias when HOME itself is a symlink', () => {

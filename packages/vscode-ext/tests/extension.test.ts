@@ -334,6 +334,18 @@ describe('server state -> status bar', () => {
     await ext.deactivate();
   });
 
+  it('redacts a standalone home directory before terminal punctuation in a startup failure tooltip', async () => {
+    lc.FakeLanguageClient.nextStartError = new Error(`failed to open ${homedir()}.`);
+    const ext = await loadExtension();
+    ext.activate(makeContext() as never);
+    await settle();
+
+    const tooltip = statusItem().tooltip!;
+    expect(tooltip).not.toContain(homedir());
+    expect(tooltip).toContain('failed to open ~.');
+    await ext.deactivate();
+  });
+
   it('redacts the workspace root in the status tooltip', async () => {
     const ext = await loadExtension();
     ext.activate(makeContext() as never);
