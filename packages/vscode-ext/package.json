@@ -123,6 +123,27 @@
           "default": [],
           "markdownDescription": "Extra preprocessor defines, **added** to the ones the game target and signature level derive and to `info.toml` `[script].defines` — listing `DEV` does not drop `TMNEXT`. Prefix an entry with `-` or `!` to turn a define off (`-LOGS`). Forwarded to the server as `defines`."
         },
+        "openplanetLsp.unused": {
+          "type": "string",
+          "default": "",
+          "enum": [
+            "",
+            "ignore",
+            "hint",
+            "info",
+            "warn",
+            "error"
+          ],
+          "enumDescriptions": [
+            "Unset — the workspace .openplanet-lsp.toml or the user config decides (server default: warn).",
+            "Turn the unused-declaration pass off entirely.",
+            "Report as Hints: greyed out in the editor, kept out of the Problems panel.",
+            "Report as Infos: greyed out in the editor and listed in the Problems panel.",
+            "Report as Warnings (the server default).",
+            "Report as Errors, so `openplanet-lsp check` fails on them."
+          ],
+          "markdownDescription": "How unused functions / variables / parameters / class members are reported. `hint` and `info` report the same findings at a quieter severity and never fail a `check`, not even under `--warnings-as-errors`. Findings are tagged `Unnecessary` at every level, so the declaration is faded in the editor regardless (see `editor.showUnused`). Forwarded to the server as `unused`; left empty nothing is sent, so a workspace `.openplanet-lsp.toml` keeps control. Changing this restarts the server."
+        },
         "openplanetLsp.pluginRoots": {
           "type": "array",
           "items": {

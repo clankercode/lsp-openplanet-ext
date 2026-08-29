@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `openplanetLsp.unused` — how unused functions / variables / parameters /
+  class members are reported: `hint` (greyed out in the editor, kept out of the
+  Problems panel), `info` (greyed out and listed), `warn` (the server default),
+  `error`, or `ignore`. `hint` and `info` never fail a `check`. Forwarded to the
+  server as `unused`; left empty nothing is sent, so a workspace
+  `.openplanet-lsp.toml` stays in control. Needs openplanet-lsp with server
+  B030 (the quiet levels and the `Unnecessary` diagnostic tag).
+
 - `openplanetLsp.signatureMode` — pick which Openplanet signature level the
   analysis models (`developer` default, then `school`, `regular`, `official`).
   The levels are cumulative (a macro is defined when the current level is equal

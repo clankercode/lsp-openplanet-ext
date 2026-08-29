@@ -22,6 +22,8 @@ export interface OpenplanetLspSettings {
   defines?: string[];
   /** Manual plugin-root override: dirs containing info.toml. When empty, the server auto-discovers. */
   pluginRoots?: string[];
+  /** How unused declarations are reported (server B030). '' = unset. */
+  unused?: string;
 }
 
 /** Valid `game_target` values accepted by the server (config.rs defines_for_target). */
@@ -60,6 +62,23 @@ export function isValidSignatureMode(v: string): v is SignatureMode {
 }
 
 /**
+ * Valid `unused` values accepted by the server (config.rs UnusedLevel).
+ *
+ * `hint` and `info` report the same findings at a quieter severity and never
+ * fail a `check`; every finding is tagged Unnecessary at all levels, so the
+ * editor fades the declaration regardless. The server also accepts aliases
+ * (off/grey/note/...), but the setting is an enum — offer the canonical set
+ * only, and drop anything else rather than forwarding garbage.
+ */
+export const UNUSED_LEVELS = ['ignore', 'hint', 'info', 'warn', 'error'] as const;
+
+export type UnusedLevel = (typeof UNUSED_LEVELS)[number];
+
+export function isValidUnusedLevel(v: string): v is UnusedLevel {
+  return (UNUSED_LEVELS as readonly string[]).includes(v);
+}
+
+/**
  * Build the `initializationOptions` object to send at `initialize`.
  * Only includes keys with non-empty values (see precedence contract above).
  * Returns an empty object when nothing is set — sending `{}` is fine; the
@@ -91,6 +110,15 @@ export function buildInitializationOptions(
   }
   if (settings.defines && settings.defines.length > 0) {
     opts.defines = settings.defines;
+  }
+  if (settings.unused && settings.unused.trim() !== '') {
+    // No default sentinel to skip here: the setting's own default is '',
+    // meaning "send nothing". Forwarding 'warn' on the user's behalf would
+    // override a repo .openplanet-lsp.toml that pins unused = "ignore".
+    const level = settings.unused.trim();
+    if (isValidUnusedLevel(level)) {
+      opts.unused = level;
+    }
   }
   if (settings.pluginRoots && settings.pluginRoots.length > 0) {
     // Non-empty replaces the server's automatic downward workspace scan;

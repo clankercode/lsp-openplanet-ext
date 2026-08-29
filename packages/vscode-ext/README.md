@@ -26,6 +26,7 @@ channel (_Output → Openplanet LSP_) shows exactly what was tried.
 | `openplanetLsp.gameTarget`    | `"TMNEXT"`    | Which game's `#if` platform branches are compiled. |
 | `openplanetLsp.signatureMode` | `"developer"` | Signature level whose `SIG_*` defines are live.    |
 | `openplanetLsp.defines`       | `[]`          | Extra preprocessor defines (added, not replaced).  |
+| `openplanetLsp.unused`        | `""`          | How unused declarations are reported.              |
 
 **Precedence:** the server layers configuration as auto-detect → workspace
 `.openplanet-lsp.toml` → user config → VS Code settings. The extension only forwards
@@ -46,6 +47,14 @@ the way it compiles once signed: `#if SIG_DEVELOPER` blocks go dead below `devel
 `defines` is **additive** — entries are added on top of what the game target and signature
 level derive, plus `info.toml` `[script].defines`. Prefix an entry with `-` or `!` to turn
 one off (`-LOGS`).
+
+`unused` sets how unused functions, variables, parameters and class members are reported:
+`hint` (greyed out in the editor, kept out of the Problems panel), `info` (greyed out and
+listed), `warn` (the server default), `error`, or `ignore` to turn the pass off. `hint` and
+`info` never fail a `check`, not even under `--warnings-as-errors`. Every finding carries
+the LSP `Unnecessary` tag at all levels, so the declaration is faded regardless of the
+level you pick — VS Code gates that on `editor.showUnused`. Left empty, nothing is sent
+and your `.openplanet-lsp.toml` decides.
 
 ## Commands
 
