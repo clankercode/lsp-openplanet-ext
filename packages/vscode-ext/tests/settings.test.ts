@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { buildInitializationOptions, isValidGameTarget, GAME_TARGETS } from '../src/settings.js';
+import {
+  buildInitializationOptions,
+  isValidGameTarget,
+  isValidSignatureMode,
+  GAME_TARGETS,
+  SIGNATURE_MODES,
+} from '../src/settings.js';
 
 describe('buildInitializationOptions', () => {
   it('returns an empty object when nothing is set', () => {
@@ -101,5 +107,40 @@ describe('isValidGameTarget', () => {
   });
   it('rejects unknown strings', () => {
     for (const t of ['tmnext', 'MP5', '', 'TMNEXT ']) expect(isValidGameTarget(t)).toBe(false);
+  });
+});
+
+describe('signatureMode (GH #64)', () => {
+  it('forwards a non-default level as signature_mode', () => {
+    expect(buildInitializationOptions({ signatureMode: 'regular' })).toEqual({
+      signature_mode: 'regular',
+    });
+  });
+
+  it('omits the server default so a repo .openplanet-lsp.toml keeps control', () => {
+    expect(buildInitializationOptions({ signatureMode: 'developer' })).toEqual({});
+    expect(buildInitializationOptions({ signatureMode: '' })).toEqual({});
+  });
+
+  it('omits an unknown level rather than sending it', () => {
+    expect(buildInitializationOptions({ signatureMode: 'banana' })).toEqual({});
+  });
+
+  it('accepts every documented level', () => {
+    for (const mode of SIGNATURE_MODES) {
+      expect(isValidSignatureMode(mode)).toBe(true);
+    }
+    expect(isValidSignatureMode('banana')).toBe(false);
+    expect(SIGNATURE_MODES).toEqual(['developer', 'school', 'regular', 'official']);
+  });
+
+  it('rides alongside the other keys', () => {
+    expect(
+      buildInitializationOptions({
+        gameTarget: 'MP4',
+        signatureMode: 'official',
+        defines: ['DEV'],
+      }),
+    ).toEqual({ game_target: 'MP4', signature_mode: 'official', defines: ['DEV'] });
   });
 });

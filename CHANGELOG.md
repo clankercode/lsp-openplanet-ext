@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `openplanetLsp.signatureMode` — pick which Openplanet signature level the
+  analysis models (`developer` default, then `school`, `regular`, `official`).
+  The levels are cumulative (a macro is defined when the current level is equal
+  or below its own), so `official` gives `SIG_OFFICIAL` alone and `developer`
+  gives all four. Forwarded to the server as `signature_mode`; left at
+  `developer` nothing is sent, so a workspace `.openplanet-lsp.toml` stays in
+  control. Needs openplanet-lsp with GH #64.
+
+### Changed
+
+- `openplanetLsp.defines` documentation now matches the server: entries are
+  **added** to the game-target/signature defines and `info.toml`
+  `[script].defines` rather than replacing them, and `-NAME` / `!NAME` turns a
+  define off. The old "replaces the game-target defaults" wording was stale.
+
 ## [0.3.0] - 2026-08-17
 
 First release with a live CI pipeline, a modernized grammar, and a hardened

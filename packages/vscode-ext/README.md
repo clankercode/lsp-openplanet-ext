@@ -18,13 +18,14 @@ channel (_Output → Openplanet LSP_) shows exactly what was tried.
 
 ## Settings
 
-| Setting                       | Default    | Description                                        |
-| ----------------------------- | ---------- | -------------------------------------------------- |
-| `openplanetLsp.serverPath`    | `""`       | Absolute path to the binary override.              |
-| `openplanetLsp.openplanetDir` | `""`       | Openplanet install dir (auto-detected when empty). |
-| `openplanetLsp.pluginsDir`    | `""`       | Plugins dir (auto-detected when empty).            |
-| `openplanetLsp.gameTarget`    | `"TMNEXT"` | Which game's `#if` platform branches are compiled. |
-| `openplanetLsp.defines`       | `[]`       | Extra preprocessor defines.                        |
+| Setting                       | Default       | Description                                        |
+| ----------------------------- | ------------- | -------------------------------------------------- |
+| `openplanetLsp.serverPath`    | `""`          | Absolute path to the binary override.              |
+| `openplanetLsp.openplanetDir` | `""`          | Openplanet install dir (auto-detected when empty). |
+| `openplanetLsp.pluginsDir`    | `""`          | Plugins dir (auto-detected when empty).            |
+| `openplanetLsp.gameTarget`    | `"TMNEXT"`    | Which game's `#if` platform branches are compiled. |
+| `openplanetLsp.signatureMode` | `"developer"` | Signature level whose `SIG_*` defines are live.    |
+| `openplanetLsp.defines`       | `[]`          | Extra preprocessor defines (added, not replaced).  |
 
 **Precedence:** the server layers configuration as auto-detect → workspace
 `.openplanet-lsp.toml` → user config → VS Code settings. The extension only forwards
@@ -35,6 +36,16 @@ repo's `.openplanet-lsp.toml` stays in control for your teammates.
 your plugin targets so dead `#if MP4` / `#if TURBO` branches are treated as dead, exactly
 like the real game does. Changing settings restarts the server automatically (they are
 read at initialize time).
+
+`signatureMode` does the same for the signature defines. Openplanet defines a signature
+macro when the current level is equal or **below** that macro's level, so the levels are
+cumulative — `official` gives `SIG_OFFICIAL`, `regular` adds `SIG_REGULAR`, `school` adds
+`SIG_SCHOOL`, and `developer` (the default) gives all four. Narrow it to check your plugin
+the way it compiles once signed: `#if SIG_DEVELOPER` blocks go dead below `developer`.
+
+`defines` is **additive** — entries are added on top of what the game target and signature
+level derive, plus `info.toml` `[script].defines`. Prefix an entry with `-` or `!` to turn
+one off (`-LOGS`).
 
 ## Commands
 
