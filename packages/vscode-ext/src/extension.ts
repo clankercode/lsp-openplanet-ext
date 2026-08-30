@@ -11,7 +11,8 @@ import {
 } from 'vscode-languageclient/node';
 import { buildInitializationOptions, type OpenplanetLspSettings } from './settings';
 import { abbreviateHomeInText } from './paths';
-import { DEFINES_COMMANDS } from './definesCommands';
+import { DEFINES_COMMANDS, setResolvedDefinesProvider } from './definesCommands';
+import { requestResolvedDefines } from './resolvedDefines';
 import { renderStatusBar, type StatusInfo } from './status';
 import { buildStatusReport } from './statusReport';
 import { probeServerVersion, probeTypeDb } from './serverProbe';
@@ -416,6 +417,8 @@ function collectStatusReport(context: vscode.ExtensionContext): string {
 function resetModuleState(): void {
   clearRestartTimer();
   startGeneration += 1;
+  // Drops this activation's closure over `client` / `outputChannel`.
+  setResolvedDefinesProvider(undefined);
   client = undefined;
   outputChannel = undefined;
   statusItem = undefined;
@@ -485,6 +488,21 @@ export function activate(context: vscode.ExtensionContext): void {
     );
   }
 
+  // B050: let that UI read the server's resolved define set, so it can show
+  // the manifest, dependency, OS/arch and platform defines the user never
+  // typed — not just their own overrides.
+  //
+  // The closure reads `client` at CALL time. Capturing the instance instead
+  // would pin the client alive at activation and go stale on the first
+  // restart, and restarts are routine here (every `openplanetLsp` settings
+  // change triggers one). The `Running` guard keeps a request off a client
+  // that is still starting or has stopped, where `sendRequest` would reject.
+  setResolvedDefinesProvider((uri) =>
+    requestResolvedDefines(client?.state === State.Running ? client : undefined, uri, (msg) =>
+      outputChannel?.appendLine(msg),
+    ),
+  );
+
   // Multi-root: the interesting root is the one owning the editor you are
   // looking at, so follow the active editor rather than pinning folder 0.
   context.subscriptions.push(
@@ -514,6 +532,10 @@ export function deactivate(): Thenable<void> | undefined {
   startGeneration += 1;
   restarting = false;
   clearRestartTimer();
+  // Drop the introspection closure here as well as in `resetModuleState`:
+  // this path does NOT go through that function, and a provider left behind
+  // would outlive the client and the output channel it closes over.
+  setResolvedDefinesProvider(undefined);
   clientStateSub?.dispose();
   clientStateSub = undefined;
   statusItem?.dispose();

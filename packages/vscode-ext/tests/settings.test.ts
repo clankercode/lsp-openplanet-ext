@@ -272,4 +272,33 @@ describe('PLATFORM_FAMILIES', () => {
       expect(isPlatformSelector(other), other).toBe(false);
     }
   });
+
+  // B050: the server's table is preferred over the bundled copy whenever the
+  // caller has one, which is what stops the duplicate drifting into a lie.
+  it('prefers a server-supplied family table over the bundled copy', () => {
+    const fromServer = [
+      ['TMNEXT', 'TMNEXT_BETA'],
+      ['MP4', 'MP40', 'MP41', 'MP42'],
+    ];
+    expect(platformFamilyFor('TMNEXT', fromServer)).toEqual(['TMNEXT', 'TMNEXT_BETA']);
+    // A selector the bundled copy has never heard of is known when the server
+    // says it exists — the whole point of asking.
+    expect(isPlatformSelector('MP42', fromServer)).toBe(true);
+    expect(isPlatformSelector('MP42')).toBe(false);
+  });
+
+  it('falls back to the bundled copy for an empty or missing server table', () => {
+    // A server that reported no families has told us nothing. Believing it
+    // would make every selector foreign and warn on all of them.
+    for (const families of [undefined, []]) {
+      expect(platformFamilyFor('MP41', families)).toEqual(['MP4', 'MP40', 'MP41']);
+      expect(isPlatformSelector('TURBO', families)).toBe(true);
+    }
+  });
+
+  it('honours a server table that REMOVES a family the bundled copy has', () => {
+    const fromServer = [['TMNEXT']];
+    expect(platformFamilyFor('TURBO', fromServer)).toBeUndefined();
+    expect(isPlatformSelector('TURBO', fromServer)).toBe(false);
+  });
 });

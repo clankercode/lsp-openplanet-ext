@@ -17,14 +17,27 @@
  * is almost always project-specific. Note that a VS Code array setting does
  * NOT merge across scopes, which `baseEntriesForScope` handles.
  *
- * ## Known limit: origins
+ * ## Origins
  *
- * The manage view can only name origins it can prove. No server request
- * exposes the resolved define set with its winning config layer today, so the
- * rows are the user's own override entries and the origin reads
- * "user setting". The pure module already takes a resolved set and produces
- * minimal writes from it; wiring a future `openplanet-lsp/resolvedDefines`
- * request into `buildDefineRows` is the whole remaining change.
+ * The manage view names origins it can prove, and since B050 it can prove
+ * most of them: `openplanet/resolvedDefines` returns the effective set with
+ * an origin per entry, and {@link manageDefines} feeds that straight to
+ * `buildDefineRows`. Rows the server derived (game target, signature level,
+ * OS/arch, build shape, `info.toml`, resolved dependencies) are shown with
+ * their real origin, alongside declared dependencies that did NOT resolve —
+ * the rows that explain a dead `#if DEPENDENCY_X` branch.
+ *
+ * With no server answer the view falls back to B034's behaviour — the user's
+ * own entries, origin "user setting" — and SAYS SO in the placeholder, which
+ * is the part that was missing: the old view was a partial truth with no
+ * indication it was partial.
+ *
+ * ## Derived rows are not entries
+ *
+ * A derived row is not editable as a settings entry, only as a state. Toggling
+ * one off writes `-NAME` (an override that disables it); nothing in this file
+ * can delete it, because there is nothing to delete — **Remove Define** lists
+ * the user's own array elements, which a purely derived row does not have.
  */
 
 import * as vscode from 'vscode';
@@ -46,9 +59,62 @@ import {
   type DefinesScope,
   type InspectedDefines,
 } from './defines';
+import { requestResolvedDefines, type ResolvedDefinesProvider } from './resolvedDefines';
+import type { PlatformFamilies } from './settings';
+
+/** Last path segment of an absolute plugin root, for display. */
+function basename(p: string): string {
+  const trimmed = p.replace(/[\\/]+$/, '');
+  const cut = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
+  return cut === -1 ? trimmed : trimmed.slice(cut + 1);
+}
 
 const SECTION = 'openplanetLsp';
 const KEY = 'defines';
+
+/**
+ * How these commands reach the language server (B050).
+ *
+ * Injected by `extension.ts` rather than imported, for two reasons: the client
+ * is replaced on every restart, so a captured reference would go stale; and
+ * this module would otherwise have to import `vscode-languageclient`, which
+ * the unit tests do not stub.
+ *
+ * `undefined` — before the first start, and after `deactivate` — is a
+ * supported state, not an error: the UI degrades to B034 behaviour.
+ */
+let introspect: ResolvedDefinesProvider | undefined;
+
+/** Install (or, with `undefined`, remove) the introspection provider. */
+export function setResolvedDefinesProvider(provider?: ResolvedDefinesProvider): void {
+  introspect = provider;
+}
+
+/**
+ * The document whose plugin workspace should answer. A multi-root window
+ * serves one config PER root, so the interesting one is the root owning the
+ * editor the user is looking at — the same rule `extension.ts` uses for the
+ * status bar. Falls back to the first folder, then to no URI (the server's
+ * window-wide config).
+ */
+function scopeUri(): string | undefined {
+  const active = vscode.window.activeTextEditor?.document.uri;
+  if (active) return active.toString();
+  return vscode.workspace.workspaceFolders?.[0]?.uri.toString();
+}
+
+/** The resolved set, or `undefined` when no server can answer. */
+async function askServer(log?: Logger) {
+  if (!introspect) return requestResolvedDefines(undefined, undefined, log);
+  try {
+    return await introspect(scopeUri());
+  } catch (err) {
+    // A provider must not reject, but a broken one must not take the command
+    // down with it — the whole point of this path is that it is optional.
+    log?.(`[defines] introspection provider failed: ${err instanceof Error ? err.message : err}`);
+    return undefined;
+  }
+}
 
 /** Writes one line to the extension's output channel, when there is one. */
 export type Logger = (message: string) => void;
@@ -151,15 +217,21 @@ async function writeDefines(
   }
 }
 
-/** `NAME  •  on (user setting)` — the state and origin, greyed, per row. */
-function rowItem(row: DefineRow, target: string): RowItem {
+/** `NAME  •  on (game target)` — the state and origin, greyed, per row. */
+function rowItem(row: DefineRow, target: string, families?: PlatformFamilies): RowItem {
   const state = row.active ? 'on' : 'off';
+  // A row the server derived and the user has never touched has nothing to
+  // delete — toggling it writes an override, it does not edit an entry. Say
+  // that, so "no entry" does not read as "nothing here".
+  const derivedOnly = row.entry === undefined && row.origin !== 'user';
   const base = row.entry
     ? `${state} — settings entry \`${row.entry}\``
-    : `${state} — no entry in openplanetLsp.defines`;
+    : derivedOnly
+      ? `${state} — derived by the server; toggling writes an override`
+      : `${state} — no entry in openplanetLsp.defines`;
   // Same GH #36 hazard as Add Define: a row for a foreign platform selector
   // turns off the target's own selectors while it is checked.
-  const caution = platformSelectorCaution(row.name, target);
+  const caution = platformSelectorCaution(row.name, target, families);
   const detail = caution ? `${base} · ⚠ ${caution}` : base;
   return {
     label: row.name,
@@ -182,7 +254,10 @@ export async function manageDefines(log?: Logger): Promise<void> {
   if (!scope) return;
 
   const entries = baseEntriesForScope(inspectDefines(), scope);
-  const rows = buildDefineRows(entries);
+  // B050: the whole effective set when a server can answer, the user's own
+  // entries when it cannot.
+  const resolved = await askServer(log);
+  const rows = buildDefineRows(entries, resolved?.defines);
 
   if (rows.length === 0) {
     const choice = await vscode.window.showInformationMessage(
@@ -195,14 +270,25 @@ export async function manageDefines(log?: Logger): Promise<void> {
     return;
   }
 
-  const target = gameTarget();
+  // The server's resolved target beats the setting: a workspace
+  // `.openplanet-lsp.toml` can set a target the setting never mentions.
+  const target = resolved?.gameTarget || gameTarget();
+  const families = resolved?.platformFamilies;
+  // Name the plugin the answer is scoped to. In a multi-root window the
+  // define sets genuinely differ per plugin, and an unlabelled list would be
+  // the same "partial truth with no indication it is partial" this feature
+  // exists to end.
+  const plugin = resolved?.root ? `${basename(resolved.root)} · ` : '';
   const picked = await vscode.window.showQuickPick(
-    rows.map((row) => rowItem(row, target)),
+    rows.map((row) => rowItem(row, target, families)),
     {
       canPickMany: true,
-      title: `Manage Defines (${scopeLabel(scope)} overrides)`,
-      placeHolder:
-        'Checked = on. Unchecking writes -NAME; use Remove Define to delete an entry instead.',
+      title: resolved
+        ? `Manage Defines (${scopeLabel(scope)} scope, ${plugin}${target})`
+        : `Manage Defines (${scopeLabel(scope)} overrides)`,
+      placeHolder: resolved
+        ? 'Checked = on. Unchecking writes -NAME; use Remove Define to delete an entry instead.'
+        : 'Overrides only — the server did not report the derived set (not running, or an older build).',
       matchOnDescription: true,
     },
   );
@@ -211,7 +297,16 @@ export async function manageDefines(log?: Logger): Promise<void> {
   const wantedOn = new Set(picked.map((item) => item.row.name));
   const edits: DefineEdit[] = rows
     .filter((row) => wantedOn.has(row.name) !== row.active)
-    .map((row) => ({ name: row.name, on: !row.active, derivedOn: row.derivedOn }));
+    .map((row) => ({
+      name: row.name,
+      on: !row.active,
+      derivedOn: row.derivedOn,
+      // Only a server answer carries a resolved target and family table. The
+      // offline path leaves `derivedOn` undefined, so it never takes the
+      // minimal-write shortcut this guards.
+      gameTarget: resolved?.gameTarget,
+      platformFamilies: resolved?.platformFamilies,
+    }));
   if (edits.length === 0) return;
 
   await writeDefines(scope, applyDefineEdits(entries, edits), log);
@@ -224,6 +319,12 @@ export async function manageDefines(log?: Logger): Promise<void> {
  * of **Manage Defines** does not put the same question twice in a row.
  */
 export async function addDefine(log?: Logger, presetScope?: DefinesScope): Promise<void> {
+  // Fetched BEFORE the box opens: `validateInput` is synchronous, so the
+  // guard can only use an answer that already arrived.
+  const resolved = await askServer(log);
+  const guardTarget = resolved?.gameTarget || gameTarget();
+  const families = resolved?.platformFamilies;
+  const derived = new Map(resolved?.defines.map((d) => [d.name, d.derivedActive]) ?? []);
   const typed = await vscode.window.showInputBox({
     title: 'Add Define',
     prompt:
@@ -232,7 +333,7 @@ export async function addDefine(log?: Logger, presetScope?: DefinesScope): Promi
     placeHolder: 'MY_FLAG',
     ignoreFocusOut: true,
     validateInput: (value) => {
-      const issue = validateDefineEntry(value, gameTarget());
+      const issue = validateDefineEntry(value, guardTarget, families);
       if (!issue) return undefined;
       return {
         message: issue.message,
@@ -254,9 +355,29 @@ export async function addDefine(log?: Logger, presetScope?: DefinesScope): Promi
   if (!scope) return;
 
   const entries = baseEntriesForScope(inspectDefines(), scope);
-  // No derived state is known, so the entry states the wanted state outright.
-  const next = applyDefineEdit(entries, { name: parsed.name, on: parsed.on });
+  // With a server answer the derived state is known, so adding a define that
+  // is already derived-on writes NOTHING rather than a redundant entry
+  // (`applyDefineEdit` drops it). Without one, `derivedOn` stays undefined
+  // and the entry states the wanted state outright.
+  const next = applyDefineEdit(entries, {
+    name: parsed.name,
+    on: parsed.on,
+    derivedOn: derived.get(parsed.name),
+    gameTarget: resolved?.gameTarget,
+    platformFamilies: resolved?.platformFamilies,
+  });
   if (next.length === entries.length && next.every((entry, index) => entry === entries[index])) {
+    // Nothing to write. With a server answer that is usually because the
+    // define is ALREADY in the wanted state without an override, and saying
+    // so beats a silent no-op that reads like a failed command.
+    const hasEntry = parseDefineEntries(entries).some((e) => e.name === parsed.name);
+    const alreadyDerived = !hasEntry && derived.get(parsed.name) === parsed.on;
+    void vscode.window.showInformationMessage(
+      alreadyDerived
+        ? `\`${parsed.name}\` is already ${parsed.on ? 'on' : 'off'} without an override, ` +
+            'so no setting was written.'
+        : `openplanetLsp.defines already says that; nothing was written.`,
+    );
     return;
   }
   await writeDefines(scope, next, log);

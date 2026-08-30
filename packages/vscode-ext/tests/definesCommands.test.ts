@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import * as fakeVscode from './mocks/vscode';
 import {
@@ -8,7 +8,9 @@ import {
   clearDefineOverrides,
   manageDefines,
   removeDefine,
+  setResolvedDefinesProvider,
 } from '../src/definesCommands';
+import type { ResolvedDefinesResult } from '../src/resolvedDefines';
 
 /**
  * Command-level tests for the defines UI (B034).
@@ -452,5 +454,400 @@ describe('clearDefineOverrides', () => {
     const msg = fakeVscode.recorded.messages.at(-1)?.message ?? '';
     expect(msg).toContain('2');
     expect(msg.toLowerCase()).toContain('workspace');
+  });
+});
+
+/**
+ * B050: the manage view driven by a real server answer.
+ *
+ * These are the tests that distinguish the shipped feature from a green unit
+ * suite: they install an introspection provider (as `extension.ts` does) and
+ * assert what the user then sees and what lands in settings.
+ */
+describe('manageDefines with server introspection', () => {
+  /** The shape `openplanet/resolvedDefines` returns for a real plugin. */
+  function serverAnswer(overrides: Partial<ResolvedDefinesResult> = {}): ResolvedDefinesResult {
+    return {
+      gameTarget: 'TMNEXT',
+      platformFamilies: [['TMNEXT'], ['MP4', 'MP40', 'MP41'], ['TURBO']],
+      defines: [
+        { name: 'TMNEXT', active: true, origin: 'target', derivedActive: true },
+        { name: 'SIG_DEVELOPER', active: true, origin: 'signature', derivedActive: true },
+        { name: 'WINDOWS', active: true, origin: 'os', derivedActive: true },
+        { name: 'MANIA64', active: true, origin: 'arch', derivedActive: true },
+        { name: 'LOGS', active: true, origin: 'build', derivedActive: true },
+        { name: 'FROM_MANIFEST', active: true, origin: 'manifest', derivedActive: true },
+        {
+          name: 'DEPENDENCY_MLHOOK',
+          active: true,
+          origin: 'dependency',
+          derivedActive: true,
+        },
+        {
+          name: 'DEPENDENCY_GONE',
+          active: false,
+          origin: 'dependency-missing',
+          derivedActive: false,
+        },
+      ],
+      ...overrides,
+    };
+  }
+
+  /** Install the provider the way `extension.ts` does. */
+  function serve(answer: ResolvedDefinesResult | undefined = serverAnswer()) {
+    const calls: (string | undefined)[] = [];
+    setResolvedDefinesProvider(async (uri) => {
+      calls.push(uri);
+      return answer;
+    });
+    return calls;
+  }
+
+  afterEach(() => setResolvedDefinesProvider(undefined));
+
+  it('lists the derived set the user never typed', async () => {
+    serve();
+    queueScope('Workspace');
+    queuePicks(() => true);
+    await manageDefines();
+    // The defect B050 fixes: none of these appear in openplanetLsp.defines,
+    // and before introspection none of them could be shown at all.
+    expect(pickLabels(1)).toEqual(
+      expect.arrayContaining([
+        'TMNEXT',
+        'SIG_DEVELOPER',
+        'WINDOWS',
+        'MANIA64',
+        'LOGS',
+        'FROM_MANIFEST',
+        'DEPENDENCY_MLHOOK',
+        'DEPENDENCY_GONE',
+      ]),
+    );
+  });
+
+  it('names each derived origin instead of calling everything a user setting', async () => {
+    serve();
+    queueScope('Workspace');
+    queuePicks(() => true);
+    await manageDefines();
+    const rows = fakeVscode.recorded.quickPicks[1].items as PickItem[];
+    const describe_ = (name: string) => rows.find((r) => r.label === name)?.description ?? '';
+    expect(describe_('TMNEXT')).toContain('game target');
+    expect(describe_('SIG_DEVELOPER')).toContain('signature level');
+    expect(describe_('WINDOWS')).toContain('host OS');
+    expect(describe_('MANIA64')).toContain('architecture');
+    expect(describe_('LOGS')).toContain('build shape');
+    expect(describe_('FROM_MANIFEST')).toContain('info.toml');
+    expect(describe_('DEPENDENCY_MLHOOK')).toContain('dependency');
+  });
+
+  it('shows an uninstalled dependency as an unchecked row, not as an absent one', async () => {
+    serve();
+    queueScope('Workspace');
+    queuePicks(() => false);
+    await manageDefines();
+    const rows = fakeVscode.recorded.quickPicks[1].items as PickItem[];
+    const gone = rows.find((r) => r.label === 'DEPENDENCY_GONE');
+    // This row is the whole explanation for a dead `#if DEPENDENCY_GONE`
+    // branch (B031). Omitting it would leave the user with no way to see why.
+    expect(gone).toBeDefined();
+    expect(gone?.picked).toBe(false);
+    expect(gone?.description).toContain('not installed');
+  });
+
+  it('names the plugin the answer is scoped to in the title', async () => {
+    serve(serverAnswer({ root: '/ws/my-plugin/alpha' }));
+    queueScope('Workspace');
+    queuePicks(() => true);
+    await manageDefines();
+    // A multi-root window has a DIFFERENT define set per plugin, so an
+    // unlabelled list would be exactly the partial truth B050 exists to end.
+    const title = fakeVscode.recorded.quickPicks[1].options?.title ?? '';
+    expect(title).toContain('alpha');
+    expect(title).toContain('TMNEXT');
+  });
+
+  it('omits the plugin name when the server did not scope the answer', async () => {
+    serve(serverAnswer());
+    queueScope('Workspace');
+    queuePicks(() => true);
+    await manageDefines();
+    const title = fakeVscode.recorded.quickPicks[1].options?.title ?? '';
+    expect(title).toContain('TMNEXT');
+    expect(title).not.toContain('·');
+  });
+
+  it('degrades when the server refuses an uri it cannot scope', async () => {
+    // Several plugin workspaces live and the active editor is in none of
+    // them: the server rejects rather than hand back another plugin's set,
+    // and the UI falls back to overrides-only.
+    setResolvedDefinesProvider(async () => undefined);
+    fakeVscode.__setConfigScopes({ [KEY]: { workspaceValue: ['DEV'] } });
+    queueScope('Workspace');
+    queuePicks(() => false);
+    await manageDefines();
+    expect(lastWrite()).toEqual(['-DEV']);
+  });
+
+  it('re-checking a target selector suppressed by a foreign one actually turns it on', async () => {
+    // `defines: ["MP4"]` under game_target TMNEXT: the server REPLACES the
+    // target's selectors, so TMNEXT is derived-on but currently OFF. The
+    // minimal write (drop TMNEXT's override — there is none) would leave the
+    // array untouched: the user checks the row, one settings write happens,
+    // and nothing changes.
+    serve(
+      serverAnswer({
+        defines: [
+          { name: 'TMNEXT', active: false, origin: 'target', derivedActive: true },
+          { name: 'MP4', active: true, origin: 'user', derivedActive: false },
+        ],
+      }),
+    );
+    fakeVscode.__setConfigScopes({ [KEY]: { workspaceValue: ['MP4'] } });
+    queueScope('Workspace');
+    queuePicks(() => true); // check TMNEXT; MP4 was already checked
+    await manageDefines();
+    const written = lastWrite() as string[];
+    expect(written).toContain('TMNEXT');
+    // MP4's row is still checked, so its entry stays: this UI does not delete
+    // an entry the user did not uncheck.
+    expect(written).toContain('MP4');
+  });
+
+  it('scopes the request to the active editor', async () => {
+    const calls = serve();
+    fakeVscode.__setActiveEditor('/ws/my-plugin/src/Main.as');
+    queueScope('Workspace');
+    queuePicks(() => true);
+    await manageDefines();
+    // Multi-root windows serve one config PER root; a window-wide answer
+    // would be right for at most one of them.
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain('/ws/my-plugin/src/Main.as');
+  });
+
+  it('uses the server target for the foreign-selector guard, not the setting', async () => {
+    // The B034 caveat: the setting can disagree with a workspace
+    // `.openplanet-lsp.toml`, and the server knows which one won.
+    fakeVscode.__setConfig({ 'openplanetLsp.gameTarget': 'TMNEXT' });
+    serve(
+      serverAnswer({
+        gameTarget: 'MP4',
+        defines: [
+          { name: 'MP4', active: true, origin: 'target', derivedActive: true },
+          { name: 'MP41', active: true, origin: 'target', derivedActive: true },
+          { name: 'TURBO', active: true, origin: 'user', derivedActive: false },
+        ],
+      }),
+    );
+    queueScope('Workspace');
+    queuePicks(() => true);
+    await manageDefines();
+    const rows = fakeVscode.recorded.quickPicks[1].items as PickItem[];
+    const detailOf = (n: string) => rows.find((r) => r.label === n)?.detail ?? '';
+    // Same family as the SERVER's target: not foreign.
+    expect(detailOf('MP41')).not.toContain('⚠');
+    // Another generation: foreign, and the warning names the server's target.
+    expect(detailOf('TURBO')).toContain('⚠');
+    expect(detailOf('TURBO')).toContain('MP4');
+  });
+
+  it('says so when no server can answer, instead of showing a silent partial list', async () => {
+    setResolvedDefinesProvider(undefined);
+    fakeVscode.__setConfigScopes({ [KEY]: { workspaceValue: ['DEV'] } });
+    queueScope('Workspace');
+    queuePicks(() => true);
+    await manageDefines();
+    // The B034 complaint was a partial truth with no indication it was
+    // partial. Degrading is fine; degrading silently is not.
+    const placeholder = fakeVscode.recorded.quickPicks[1].options?.placeHolder ?? '';
+    // Accurate for BOTH degraded cases: no server at all, and a server older
+    // than B050 that answers MethodNotFound. `BINARY_REF` still pins v0.5.0,
+    // so the second is the case users hit first.
+    expect(placeholder).toContain('Overrides only');
+    expect(placeholder).toContain('older build');
+  });
+
+  it('survives a provider that rejects', async () => {
+    setResolvedDefinesProvider(() => Promise.reject(new Error('boom')));
+    fakeVscode.__setConfigScopes({ [KEY]: { workspaceValue: ['DEV'] } });
+    queueScope('Workspace');
+    queuePicks(() => false);
+    await manageDefines();
+    expect(lastWrite()).toEqual(['-DEV']);
+  });
+});
+
+/**
+ * B050 gate: a derived row is a STATE the user can flip, never an ENTRY they
+ * can delete. Nothing in the defines UI may remove a define the server
+ * derived — the array does not contain it, so "removing" it could only mean
+ * silently doing nothing while the row disappears.
+ */
+describe('derived rows are not deletable', () => {
+  const DERIVED: ResolvedDefinesResult = {
+    gameTarget: 'TMNEXT',
+    platformFamilies: [['TMNEXT']],
+    defines: [
+      { name: 'TMNEXT', active: true, origin: 'target', derivedActive: true },
+      { name: 'LOGS', active: true, origin: 'build', derivedActive: true },
+      { name: 'MY_FLAG', active: true, origin: 'user', derivedActive: false },
+    ],
+  };
+
+  beforeEach(() => setResolvedDefinesProvider(async () => DERIVED));
+  afterEach(() => setResolvedDefinesProvider(undefined));
+
+  it('Remove Define offers only the user’s own array entries', async () => {
+    fakeVscode.__setConfigScopes({ [KEY]: { workspaceValue: ['MY_FLAG'] } });
+    queueScope('Workspace');
+    queuePicks(() => false);
+    await removeDefine();
+    // TMNEXT and LOGS are derived and have no entry, so there is nothing to
+    // delete and they must not be offered.
+    expect(pickLabels(1)).toEqual(['MY_FLAG']);
+  });
+
+  it('Remove Define reports nothing to remove when every row is derived', async () => {
+    queueScope('Workspace');
+    await removeDefine();
+    expect(fakeVscode.recorded.quickPicks).toHaveLength(1); // scope only
+    expect(fakeVscode.recorded.infos.at(-1)).toContain('No define overrides');
+    expect(updates()).toHaveLength(0);
+  });
+
+  it('unchecking a derived row ADDS a -NAME override; it deletes nothing', async () => {
+    fakeVscode.__setConfigScopes({ [KEY]: { workspaceValue: ['KEEP_ME'] } });
+    queueScope('Workspace');
+    queuePicks((i) => i.label !== 'LOGS');
+    await manageDefines();
+    const written = lastWrite() as string[];
+    expect(written).toContain('-LOGS');
+    // Every pre-existing element survives: this is an append, not a rewrite.
+    expect(written).toContain('KEEP_ME');
+  });
+
+  it('re-checking a derived row REMOVES the override rather than writing an explicit add', async () => {
+    // The server sees the `-LOGS` the user already wrote, so it reports LOGS
+    // OFF but derived-ON — the present-but-disabled state.
+    setResolvedDefinesProvider(async () => ({
+      ...DERIVED,
+      defines: DERIVED.defines.map((d) =>
+        d.name === 'LOGS' ? { ...d, active: false, derivedActive: true } : d,
+      ),
+    }));
+    fakeVscode.__setConfigScopes({ [KEY]: { workspaceValue: ['-LOGS', 'KEEP_ME'] } });
+    queueScope('Workspace');
+    queuePicks(() => true);
+    await manageDefines();
+    // derivedActive === true, so back-on is the DERIVED state and the minimal
+    // write is dropping the override — not adding a redundant `LOGS`.
+    expect(lastWrite()).toEqual(['KEEP_ME']);
+  });
+
+  it('labels a purely derived row as derived rather than as a missing entry', async () => {
+    queueScope('Workspace');
+    queuePicks(() => true);
+    await manageDefines();
+    const rows = fakeVscode.recorded.quickPicks[1].items as PickItem[];
+    expect(rows.find((r) => r.label === 'LOGS')?.detail).toContain('derived by the server');
+  });
+
+  it('Clear Overrides only empties the user array; derived defines are untouched', async () => {
+    fakeVscode.__setConfigScopes({ [KEY]: { workspaceValue: ['-LOGS', 'MY_FLAG'] } });
+    queueScope('Workspace');
+    queueButton('Clear');
+    await clearDefineOverrides();
+    // `unset` removes the KEY. It cannot express "delete a derived define",
+    // which is exactly the property being pinned.
+    expect(lastWrite()).toBeUndefined();
+  });
+});
+
+describe('addDefine with server introspection', () => {
+  afterEach(() => setResolvedDefinesProvider(undefined));
+
+  it('writes nothing when the define is already derived-on, and says why', async () => {
+    setResolvedDefinesProvider(async () => ({
+      gameTarget: 'TMNEXT',
+      platformFamilies: [['TMNEXT']],
+      defines: [{ name: 'LOGS', active: true, origin: 'build', derivedActive: true }],
+    }));
+    fakeVscode.__queueInputBox(() => 'LOGS');
+    queueScope('Workspace');
+    await addDefine();
+    expect(updates()).toHaveLength(0);
+    expect(fakeVscode.recorded.infos.at(-1)).toContain('already on');
+  });
+
+  it('still writes an explicit entry for a define the server does not derive', async () => {
+    setResolvedDefinesProvider(async () => ({
+      gameTarget: 'TMNEXT',
+      platformFamilies: [['TMNEXT']],
+      defines: [{ name: 'LOGS', active: true, origin: 'build', derivedActive: true }],
+    }));
+    fakeVscode.__queueInputBox(() => 'MY_FLAG');
+    queueScope('Workspace');
+    await addDefine();
+    expect(lastWrite()).toEqual(['MY_FLAG']);
+  });
+
+  it('turns a derived define off with a minimal -NAME entry', async () => {
+    setResolvedDefinesProvider(async () => ({
+      gameTarget: 'TMNEXT',
+      platformFamilies: [['TMNEXT']],
+      defines: [{ name: 'LOGS', active: true, origin: 'build', derivedActive: true }],
+    }));
+    fakeVscode.__queueInputBox(() => '-LOGS');
+    queueScope('Workspace');
+    await addDefine();
+    expect(lastWrite()).toEqual(['-LOGS']);
+  });
+});
+
+/**
+ * B050 regressions the review loop surfaced, pinned so the simpler design
+ * that avoids them stays that way. Both are cases where a fix that DELETES
+ * entries needs extra special-casing; not deleting needs none.
+ */
+describe('addDefine near a foreign platform selector', () => {
+  const FAMILIES = [['TMNEXT'], ['MP4', 'MP40', 'MP41'], ['TURBO']];
+  afterEach(() => setResolvedDefinesProvider(undefined));
+
+  function serveSelectors(defines: { name: string; active: boolean; derivedActive: boolean }[]) {
+    setResolvedDefinesProvider(async () => ({
+      gameTarget: 'TMNEXT',
+      platformFamilies: FAMILIES,
+      defines: defines.map((d) => ({ ...d, origin: 'target' as const })),
+    }));
+  }
+
+  it('leaves an already-effective target and its foreign neighbour alone', async () => {
+    // `["MP4","TMNEXT"]` is a legitimate array: the explicit TMNEXT survives
+    // the replacement, so BOTH are live. Re-adding TMNEXT must not delete
+    // either entry.
+    serveSelectors([
+      { name: 'TMNEXT', active: true, derivedActive: true },
+      { name: 'MP4', active: true, derivedActive: false },
+    ]);
+    fakeVscode.__setConfigScopes({ [KEY]: { workspaceValue: ['MP4', 'TMNEXT'] } });
+    fakeVscode.__queueInputBox(() => 'TMNEXT');
+    queueScope('Workspace');
+    await addDefine();
+    expect(updates()).toHaveLength(0);
+  });
+
+  it('drops a local -NAME even when the server answer predates it', async () => {
+    // The server answers from before the restart, so it still reports TMNEXT
+    // on. The `-TMNEXT` the user just wrote is newer and must be removed, not
+    // treated as "already on".
+    serveSelectors([{ name: 'TMNEXT', active: true, derivedActive: true }]);
+    fakeVscode.__setConfigScopes({ [KEY]: { workspaceValue: ['-TMNEXT', 'KEEP'] } });
+    fakeVscode.__queueInputBox(() => 'TMNEXT');
+    queueScope('Workspace');
+    await addDefine();
+    expect(lastWrite()).toEqual(['KEEP']);
   });
 });

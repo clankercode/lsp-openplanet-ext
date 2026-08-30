@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Manage Defines now lists the defines you never typed** (B050) — the view
+  asks the server (`openplanet/resolvedDefines`) for the effective set and
+  shows every entry with its real origin: game target, signature level,
+  host OS, architecture, build shape, `info.toml`, and resolved dependencies.
+  Dependencies declared in `info.toml` that are NOT installed appear too, as
+  unchecked rows labelled "dependency — not installed", which is what explains
+  a `#if DEPENDENCY_X` branch being greyed out.
+
+  Derived rows are states, not entries: unchecking one writes a `-NAME`
+  override, and **Remove Define** still lists only your own array elements, so
+  nothing here can delete a define the server derived. Toggling a define back
+  to its derived state now removes the override instead of writing a redundant
+  entry, and **Add Define** says so rather than silently writing nothing.
+
+  With no server running (or one older than B050) the view falls back to the
+  previous overrides-only behaviour and now SAYS it is doing so. The
+  foreign-platform-selector warning prefers the server's family table and
+  resolved game target over the bundled copy and the `openplanetLsp.gameTarget`
+  setting, which fixes the case where a workspace `.openplanet-lsp.toml` set a
+  target the setting never mentioned.
+
 - Command-palette UI for preprocessor defines (B034), so `openplanetLsp.defines`
   no longer has to be hand-edited as raw JSON: **Manage Defines** (a checklist
   where checked = on and unchecking writes the `-NAME` entry), **Add Define**,
