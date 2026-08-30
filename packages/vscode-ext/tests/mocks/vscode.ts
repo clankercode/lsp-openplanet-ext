@@ -42,6 +42,19 @@ export interface FakeMessageCall {
   items: string[];
 }
 
+/** One `window.withProgress` call: its options, and whether it finished. */
+export interface FakeProgressCall {
+  options: FakeProgressOptions;
+  /** Set once the task settles, either way. */
+  settled: boolean;
+}
+
+export interface FakeProgressOptions {
+  location?: number;
+  title?: string;
+  cancellable?: boolean;
+}
+
 export interface FakeConfigUpdate {
   section: string;
   key: string;
@@ -65,6 +78,8 @@ export interface Recorded {
   inputBoxes: FakeInputBoxOptions[];
   /** Every `WorkspaceConfiguration.update` call, in order. */
   configUpdates: FakeConfigUpdate[];
+  /** Every `window.withProgress` call, in order (B039). */
+  progress: FakeProgressCall[];
   watchers: FakeDisposable[];
   /** Disposables handed to context.subscriptions by the extension. */
   disposedCount: number;
@@ -84,6 +99,7 @@ export const recorded: Recorded = {
   quickPicks: [],
   inputBoxes: [],
   configUpdates: [],
+  progress: [],
   watchers: [],
   disposedCount: 0,
 };
@@ -103,6 +119,7 @@ export function __reset(): void {
   recorded.quickPicks = [];
   recorded.inputBoxes = [];
   recorded.configUpdates = [];
+  recorded.progress = [];
   recorded.watchers = [];
   recorded.disposedCount = 0;
   configValues = {};
@@ -358,6 +375,28 @@ export const window = {
     recorded.shownTextDocuments.push(doc);
     return Promise.resolve({ document: doc });
   },
+  /**
+   * Runs the task immediately and records the notification it would have
+   * shown. A long server command with no progress UI looks like a frozen
+   * editor, so the OPTIONS are worth asserting on, not just the outcome.
+   */
+  withProgress<R>(
+    options: FakeProgressOptions,
+    task: (progress: unknown) => Thenable<R>,
+  ): Promise<R> {
+    const call: FakeProgressCall = { options, settled: false };
+    recorded.progress.push(call);
+    return Promise.resolve(task({ report: () => {} })).then(
+      (value) => {
+        call.settled = true;
+        return value;
+      },
+      (err) => {
+        call.settled = true;
+        throw err;
+      },
+    );
+  },
   onDidChangeActiveTextEditor(listener: (e: unknown) => void): FakeDisposable {
     activeEditorListeners.push(listener);
     return new FakeDisposable(() => {
@@ -454,6 +493,9 @@ export const commands = {
 export const ConfigurationTarget = { Global: 1, Workspace: 2, WorkspaceFolder: 3 } as const;
 
 export const QuickPickItemKind = { Separator: -1, Default: 0 } as const;
+
+/** Mirrors the real enum; only Notification is used. */
+export const ProgressLocation = { SourceControl: 1, Window: 10, Notification: 15 } as const;
 
 export const InputBoxValidationSeverity = { Ignore: 0, Info: 1, Warning: 2, Error: 3 } as const;
 
