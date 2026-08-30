@@ -13,6 +13,7 @@ import { buildInitializationOptions, type OpenplanetLspSettings } from './settin
 import { abbreviateHomeInText } from './paths';
 import { DEFINES_COMMANDS, setResolvedDefinesProvider } from './definesCommands';
 import { requestResolvedDefines } from './resolvedDefines';
+import { describeRegenerateTypeDb, requestRegenerateTypeDb } from './serverCommands';
 import { renderStatusBar, type StatusInfo } from './status';
 import { buildStatusReport } from './statusReport';
 import { probeServerVersion, probeTypeDb } from './serverProbe';
@@ -357,6 +358,56 @@ async function startClient(
   }
 }
 
+/**
+ * `openplanetLsp.regenerateTypeDb` (B039): make the server re-read the type
+ * database off disk.
+ *
+ * This is the recovery action after updating Openplanet or the game, so it
+ * runs under a progress notification (it re-parses thousands of symbols) and
+ * reports what MOVED, not that it finished — an unchanged reload means the
+ * game has not written a new dump yet, which is a different problem from a
+ * stale server and is invisible in a bare "done".
+ *
+ * Every failure is shown. Unlike the defines introspection there is no useful
+ * degraded mode here: the user asked for this because they already suspect
+ * their symbols are wrong.
+ */
+async function regenerateTypeDb(): Promise<void> {
+  const log = (msg: string) => outputChannel?.appendLine(msg);
+  const running = client?.state === State.Running ? client : undefined;
+  try {
+    const result = await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: 'Openplanet LSP: regenerating the type database',
+        cancellable: false,
+      },
+      () => requestRegenerateTypeDb(running, log),
+    );
+    const summary = describeRegenerateTypeDb(result);
+    if (!result.ok) {
+      showTypeDbFailure(summary);
+      return;
+    }
+    // Keep the status bar honest: its stamps came from a probe at server
+    // start and are now a version behind.
+    if (result.after) {
+      setStatus({ typeDb: { ...status.typeDb, core: result.after.core, game: result.after.game } });
+    }
+    void vscode.window.showInformationMessage(summary);
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    log(`[typedb] regeneration failed: ${detail}`);
+    showTypeDbFailure(`Type database regeneration failed: ${detail}`);
+  }
+}
+
+function showTypeDbFailure(message: string): void {
+  void vscode.window.showErrorMessage(message, 'Show Logs').then((choice) => {
+    if (choice === 'Show Logs') outputChannel?.show();
+  });
+}
+
 async function restartClient(context: vscode.ExtensionContext): Promise<void> {
   if (deactivated || restarting) return;
   const generation = ++startGeneration;
@@ -469,6 +520,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('openplanetLsp.showLogs', () => {
       outputChannel?.show(true);
     }),
+    vscode.commands.registerCommand('openplanetLsp.regenerateTypeDb', () => regenerateTypeDb()),
     vscode.commands.registerCommand('openplanetLsp.showStatus', async () => {
       const doc = await vscode.workspace.openTextDocument({
         content: collectStatusReport(context),

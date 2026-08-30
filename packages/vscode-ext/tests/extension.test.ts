@@ -169,6 +169,8 @@ const EXPECTED_COMMANDS = [
   'openplanetLsp.restartVerbose',
   'openplanetLsp.showLogs',
   'openplanetLsp.showStatus',
+  // The server-side type-database regeneration (B039).
+  'openplanetLsp.regenerateTypeDb',
   // The defines UI (B034).
   'openplanetLsp.defines.manage',
   'openplanetLsp.defines.add',
@@ -278,11 +280,13 @@ describe('contributes.commands (package.json)', () => {
     await ext.deactivate();
   });
 
-  it('does NOT contribute regenerateTypeDb', () => {
-    // B039 owns that command and its server-side half; contributing it here
-    // would put a palette entry in front of unverified server behaviour.
+  it('contributes the CLIENT id for regenerateTypeDb, never the server one', () => {
+    // B039: the palette entry is `openplanetLsp.regenerateTypeDb`, a command
+    // this extension registers. `openplanet.regenerateTypeDb` is the name the
+    // SERVER advertises; contributing that one would give the palette an
+    // entry no registered handler answers.
     const ids = pkg.contributes.commands.map((c) => c.command);
-    expect(ids).not.toContain('openplanetLsp.regenerateTypeDb');
+    expect(ids).toContain('openplanetLsp.regenerateTypeDb');
     expect(ids).not.toContain('openplanet.regenerateTypeDb');
   });
 
@@ -921,5 +925,157 @@ describe('resolved-defines provider (B050)', () => {
     // call time rather than capturing an instance.
     expect(lc.FakeLanguageClient.requests).toHaveLength(1);
     await ext.deactivate();
+  });
+});
+
+/**
+ * B039: the palette route to `openplanet.regenerateTypeDb`.
+ *
+ * Before this the server advertised the command and nothing on the client
+ * side could invoke it. Registration and the palette entry are separately
+ * asserted above; what is here is what happens when a user actually runs it.
+ */
+describe('regenerate type database (B039)', () => {
+  const SERVER_ANSWER = {
+    ok: true,
+    message: 'Type database reloaded (4274 entries)',
+    regenerated: 4274,
+    durationMs: 480,
+    before: { op: '1.29.4 (next, Public, aaaaaaaa)', game_op: '1.29.4', mp: '2026-01-02 00:00:00' },
+    after: { op: '1.29.5 (next, Public, 1234ad9e)', game_op: '1.29.5', mp: '2026-02-03 03:51:19' },
+    changed: true,
+  };
+
+  async function activated(): Promise<typeof ext> {
+    const extension = await loadExtension();
+    extension.activate(makeContext() as never);
+    await settle();
+    return extension;
+  }
+
+  it('sends workspace/executeCommand for the advertised command name', async () => {
+    lc.FakeLanguageClient.responses['workspace/executeCommand'] = SERVER_ANSWER;
+    const extension = await activated();
+
+    await run('openplanetLsp.regenerateTypeDb');
+
+    expect(lc.FakeLanguageClient.requests).toEqual([
+      {
+        method: 'workspace/executeCommand',
+        params: { command: 'openplanet.regenerateTypeDb', arguments: [] },
+      },
+    ]);
+    await extension.deactivate();
+  });
+
+  it('runs under a progress notification, because regeneration is slow', async () => {
+    lc.FakeLanguageClient.responses['workspace/executeCommand'] = SERVER_ANSWER;
+    const extension = await activated();
+
+    await run('openplanetLsp.regenerateTypeDb');
+
+    expect(fakeVscode.recorded.progress).toHaveLength(1);
+    const [call] = fakeVscode.recorded.progress;
+    expect(call.options.location).toBe(fakeVscode.ProgressLocation.Notification);
+    expect(call.options.title).toMatch(/type database/i);
+    // A progress notification that never resolves is a permanent spinner.
+    expect(call.settled).toBe(true);
+    await extension.deactivate();
+  });
+
+  it('reports the versions that changed, not a bare "done"', async () => {
+    lc.FakeLanguageClient.responses['workspace/executeCommand'] = SERVER_ANSWER;
+    const extension = await activated();
+
+    await run('openplanetLsp.regenerateTypeDb');
+
+    expect(fakeVscode.recorded.infos).toHaveLength(1);
+    const [message] = fakeVscode.recorded.infos;
+    expect(message).toContain('1.29.4');
+    expect(message).toContain('1.29.5');
+    expect(fakeVscode.recorded.errors).toEqual([]);
+    await extension.deactivate();
+  });
+
+  it('refreshes the status bar stamps, which are now a version behind', async () => {
+    lc.FakeLanguageClient.responses['workspace/executeCommand'] = SERVER_ANSWER;
+    const extension = await activated();
+
+    await run('openplanetLsp.regenerateTypeDb');
+
+    // The start-time probe reported 1.29.5/1.29.5 in beforeEach; the point
+    // here is that the tooltip follows the COMMAND, not only that probe.
+    expect(statusItem().tooltip).toContain('1.29.5 (next, Public, 1234ad9e)');
+    await extension.deactivate();
+  });
+
+  it('surfaces a server-side failure instead of claiming success', async () => {
+    lc.FakeLanguageClient.responses['workspace/executeCommand'] = {
+      ok: false,
+      message: 'type database paths not configured (set openplanet_dir or core_json/game_json)',
+    };
+    const extension = await activated();
+
+    await run('openplanetLsp.regenerateTypeDb');
+
+    expect(fakeVscode.recorded.infos).toEqual([]);
+    expect(fakeVscode.recorded.errors).toHaveLength(1);
+    expect(fakeVscode.recorded.errors[0]).toContain('not configured');
+    // And the error offers the log, like every other failure path here.
+    expect(fakeVscode.recorded.messages.at(-1)!.items).toContain('Show Logs');
+    await extension.deactivate();
+  });
+
+  it('surfaces a rejected request — an older server answers InvalidParams', async () => {
+    // No canned response: the fake rejects, as a pre-B039 router does for an
+    // unknown command.
+    const extension = await activated();
+
+    await run('openplanetLsp.regenerateTypeDb');
+
+    expect(fakeVscode.recorded.infos).toEqual([]);
+    expect(fakeVscode.recorded.errors).toHaveLength(1);
+    expect(fakeVscode.recorded.errors[0]).toMatch(/failed/i);
+    await extension.deactivate();
+  });
+
+  it('surfaces an answer it cannot parse rather than reporting success', async () => {
+    lc.FakeLanguageClient.responses['workspace/executeCommand'] = { done: true };
+    const extension = await activated();
+
+    await run('openplanetLsp.regenerateTypeDb');
+
+    expect(fakeVscode.recorded.infos).toEqual([]);
+    expect(fakeVscode.recorded.errors).toHaveLength(1);
+    await extension.deactivate();
+  });
+
+  it('tells the user the server is not running instead of sending nothing', async () => {
+    lc.FakeLanguageClient.responses['workspace/executeCommand'] = SERVER_ANSWER;
+    const extension = await activated();
+    await lc.FakeLanguageClient.instances.at(-1)!.stop();
+    lc.FakeLanguageClient.requests = [];
+
+    await run('openplanetLsp.regenerateTypeDb');
+
+    expect(lc.FakeLanguageClient.requests).toEqual([]);
+    expect(fakeVscode.recorded.errors).toHaveLength(1);
+    expect(fakeVscode.recorded.errors[0]).toMatch(/not running/);
+    await extension.deactivate();
+  });
+
+  it('follows a restart rather than pinning the first client', async () => {
+    lc.FakeLanguageClient.responses['workspace/executeCommand'] = SERVER_ANSWER;
+    const extension = await activated();
+
+    await run('openplanetLsp.restart');
+    await settle();
+    expect(lc.FakeLanguageClient.instances.length).toBeGreaterThan(1);
+    lc.FakeLanguageClient.requests = [];
+
+    await run('openplanetLsp.regenerateTypeDb');
+
+    expect(lc.FakeLanguageClient.requests).toHaveLength(1);
+    await extension.deactivate();
   });
 });

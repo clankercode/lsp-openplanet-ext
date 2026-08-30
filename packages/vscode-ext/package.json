@@ -38,6 +38,7 @@
     "onCommand:openplanetLsp.restartVerbose",
     "onCommand:openplanetLsp.showLogs",
     "onCommand:openplanetLsp.showStatus",
+    "onCommand:openplanetLsp.regenerateTypeDb",
     "onCommand:openplanetLsp.defines.manage",
     "onCommand:openplanetLsp.defines.add",
     "onCommand:openplanetLsp.defines.remove",
@@ -93,6 +94,11 @@
       {
         "command": "openplanetLsp.showStatus",
         "title": "Show Status",
+        "category": "Openplanet LSP"
+      },
+      {
+        "command": "openplanetLsp.regenerateTypeDb",
+        "title": "Regenerate Type Database",
         "category": "Openplanet LSP"
       },
       {

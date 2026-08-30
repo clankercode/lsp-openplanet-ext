@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Openplanet LSP: Regenerate Type Database** (B039) — a command-palette
+  entry for the server command `openplanet.regenerateTypeDb`, which the
+  server had advertised since it was written with no client able to reach it.
+  This is the recovery action after updating Openplanet or the game: the LSP
+  re-reads its type database without a restart. It runs under a progress
+  notification, and reports **what moved** — Openplanet build, game version,
+  dump timestamp, before and after — rather than a bare "done", because an
+  unchanged reload (the game has not written a new dump yet) is a different
+  problem from a stale server and looks identical otherwise. The status bar's
+  type-DB stamps follow the command instead of only the start-up probe. Every
+  failure is shown with a **Show Logs** button: a server that is not running,
+  one too old to know the command, and one that ran and could not find a
+  database each say so.
+
 - **Manage Defines now lists the defines you never typed** (B050) — the view
   asks the server (`openplanet/resolvedDefines`) for the effective set and
   shows every entry with its real origin: game target, signature level,

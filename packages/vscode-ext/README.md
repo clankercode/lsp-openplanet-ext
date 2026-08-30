@@ -101,6 +101,12 @@ All under the **Openplanet LSP** category in the command palette:
   version, the type DB versions, your effective settings, and your workspace roots.
   Home directories are shown as `~`, and no environment variables are included, so
   it is safe to paste straight into an issue.
+- **Regenerate Type Database** — make the running server re-read its type database
+  from disk, without restarting it. This is the fix after updating Openplanet or the
+  game, when completions and diagnostics start disagreeing with what the game
+  accepts. It reports which versions moved (Openplanet build, game version, dump
+  timestamp) rather than just finishing, so an unchanged reload — the game has not
+  written a fresh dump yet — is visible instead of looking like success.
 - **Manage Defines** — a checklist of your `openplanetLsp.defines` overrides. Checked
   means on; unchecking one writes the `-NAME` entry that turns it off. The whole
   checklist is saved in one write, so a session of toggling restarts the server once.
