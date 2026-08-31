@@ -404,6 +404,24 @@ describe('setDefine (B170 contextual code-action command)', () => {
     expect(lastWrite()).toEqual(['-DEV']);
   });
 
+  it('canonicalizes explicit, negated, duplicate and contradictory entries in one edit', async () => {
+    fakeVscode.__setConfigScopes({
+      [KEY]: { workspaceValue: ['KEEP', '-DEV', 'DEV', 'DEV', '!DEV'] },
+    });
+    setResolvedDefinesProvider(async () => resolved('DEV', false));
+    queueScope('Workspace');
+    await setDefine({ name: 'DEV', on: true });
+    expect(lastWrite()).toEqual(['KEEP', 'DEV']);
+
+    fakeVscode.__setConfigScopes({
+      [KEY]: { workspaceValue: ['KEEP', 'DEV', '-DEV', 'DEV'] },
+    });
+    setResolvedDefinesProvider(async () => resolved('DEV', true));
+    queueScope('Workspace');
+    await setDefine({ name: 'DEV', on: false });
+    expect(lastWrite()).toEqual(['KEEP', '-DEV']);
+  });
+
   it('preserves case and does not edit a differently-cased entry', async () => {
     fakeVscode.__setConfigScopes({ [KEY]: { workspaceValue: ['DEV'] } });
     setResolvedDefinesProvider(async () => resolved('dev', false));
@@ -431,6 +449,7 @@ describe('setDefine (B170 contextual code-action command)', () => {
       undefined,
       {},
       { name: '', on: true },
+      { name: '1DEV', on: true },
       { name: 'DEV' },
       { name: 'DEV', on: 1 },
     ]) {

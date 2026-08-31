@@ -414,7 +414,7 @@ export async function setDefine(request: unknown, log?: Logger): Promise<void> {
   // The server sends a preprocessor identifier, never a raw `-NAME` entry.
   // Keep this boundary strict so a foreign client cannot smuggle whitespace
   // or a second override through the command argument.
-  if (!/^[A-Za-z0-9_]+$/.test(name)) {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
     log?.(`[defines] ignored invalid contextual define name: ${JSON.stringify(name)}`);
     return;
   }
