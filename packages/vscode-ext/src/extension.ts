@@ -11,7 +11,12 @@ import {
 } from 'vscode-languageclient/node';
 import { buildInitializationOptions, type OpenplanetLspSettings } from './settings';
 import { abbreviateHomeInText } from './paths';
-import { DEFINES_COMMANDS, setResolvedDefinesProvider } from './definesCommands';
+import {
+  DEFINE_SET_COMMAND_ID,
+  DEFINES_COMMANDS,
+  setDefine,
+  setResolvedDefinesProvider,
+} from './definesCommands';
 import { requestResolvedDefines } from './resolvedDefines';
 import { describeRegenerateTypeDb, requestRegenerateTypeDb } from './serverCommands';
 import { renderStatusBar, type StatusInfo } from './status';
@@ -539,6 +544,13 @@ export function activate(context: vscode.ExtensionContext): void {
       vscode.commands.registerCommand(id, () => handler((msg) => outputChannel?.appendLine(msg))),
     );
   }
+  // B170: this command is intentionally NOT contributed to the palette. It
+  // is the mutation endpoint carried by server-produced `#if` code actions.
+  context.subscriptions.push(
+    vscode.commands.registerCommand(DEFINE_SET_COMMAND_ID, (request: unknown) =>
+      setDefine(request, (msg) => outputChannel?.appendLine(msg)),
+    ),
+  );
 
   // B050: let that UI read the server's resolved define set, so it can show
   // the manifest, dependency, OS/arch and platform defines the user never

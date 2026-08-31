@@ -178,6 +178,9 @@ const EXPECTED_COMMANDS = [
   'openplanetLsp.defines.clearOverrides',
 ];
 
+/** Commands invoked by LSP responses rather than exposed in the palette. */
+const INTERNAL_COMMANDS = ['openplanetLsp.defines.set'];
+
 const EXPECTED_ACTIVATION_EVENTS = [
   'onLanguage:angelscript',
   'workspaceContains:**/info.toml',
@@ -301,7 +304,7 @@ describe('contributes.commands (package.json)', () => {
 });
 
 describe('activation', () => {
-  it.each(EXPECTED_COMMANDS)('registers %s', async (id) => {
+  it.each([...EXPECTED_COMMANDS, ...INTERNAL_COMMANDS])('registers %s', async (id) => {
     // Registration and palette presence are separate failures: a command can
     // be in package.json and throw "command not found" when invoked.
     const ext = await loadExtension();

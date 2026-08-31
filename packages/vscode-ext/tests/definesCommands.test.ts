@@ -8,6 +8,7 @@ import {
   clearDefineOverrides,
   manageDefines,
   removeDefine,
+  setDefine,
   setResolvedDefinesProvider,
 } from '../src/definesCommands';
 import type { ResolvedDefinesResult } from '../src/resolvedDefines';
@@ -365,6 +366,90 @@ describe('addDefine', () => {
     expect((odd as { message: string }).message).toContain('MY_DEFINE');
 
     expect(validate!('MYFLAG')).toBeUndefined();
+  });
+});
+
+describe('setDefine (B170 contextual code-action command)', () => {
+  function resolved(name: string, active: boolean): ResolvedDefinesResult {
+    return {
+      root: '/ws/my-plugin',
+      gameTarget: 'TMNEXT',
+      platformFamilies: [['TMNEXT'], ['MP4', 'MP40', 'MP41'], ['TURBO']],
+      defines: [
+        {
+          name,
+          active,
+          derivedActive: active,
+          origins: [{ kind: 'gameTarget', detail: 'TMNEXT' }],
+        },
+      ],
+    };
+  }
+
+  afterEach(() => setResolvedDefinesProvider(undefined));
+
+  it('enables a derived-off define with one workspace write', async () => {
+    setResolvedDefinesProvider(async () => resolved('DEV', false));
+    queueScope('Workspace');
+    await setDefine({ name: 'DEV', on: true });
+    expect(lastWrite()).toEqual(['DEV']);
+    expect(updates()).toHaveLength(1);
+    expect(updates()[0].target).toBe(TARGET.Workspace);
+  });
+
+  it('disables a derived-on define with the minimal negative override', async () => {
+    setResolvedDefinesProvider(async () => resolved('DEV', true));
+    queueScope('Workspace');
+    await setDefine({ name: 'DEV', on: false });
+    expect(lastWrite()).toEqual(['-DEV']);
+  });
+
+  it('preserves case and does not edit a differently-cased entry', async () => {
+    fakeVscode.__setConfigScopes({ [KEY]: { workspaceValue: ['DEV'] } });
+    setResolvedDefinesProvider(async () => resolved('dev', false));
+    queueScope('Workspace');
+    await setDefine({ name: 'dev', on: true });
+    expect(lastWrite()).toEqual(['DEV', 'dev']);
+  });
+
+  it('uses User scope without prompting when no workspace is open', async () => {
+    fakeVscode.__setWorkspaceFolders(undefined);
+    await setDefine({ name: 'DEV', on: true });
+    expect(lastWrite()).toEqual(['DEV']);
+    expect(updates()[0].target).toBe(TARGET.Global);
+    expect(fakeVscode.recorded.quickPicks).toHaveLength(0);
+  });
+
+  it('writes nothing when scope selection is cancelled', async () => {
+    fakeVscode.__queueQuickPick(() => undefined);
+    await setDefine({ name: 'DEV', on: true });
+    expect(updates()).toHaveLength(0);
+  });
+
+  it('rejects malformed command arguments without touching settings', async () => {
+    for (const args of [
+      undefined,
+      {},
+      { name: '', on: true },
+      { name: 'DEV' },
+      { name: 'DEV', on: 1 },
+    ]) {
+      await setDefine(args);
+    }
+    expect(updates()).toHaveLength(0);
+    expect(fakeVscode.recorded.quickPicks).toHaveLength(0);
+  });
+
+  it('requires confirmation for a foreign platform selector and cancellation writes nothing', async () => {
+    setResolvedDefinesProvider(async () => resolved('MP4', false));
+    await setDefine({ name: 'MP4', on: true });
+    expect(updates()).toHaveLength(0);
+    expect(fakeVscode.recorded.messages.at(-1)?.message).toContain('TMNEXT');
+
+    queueButton('Continue');
+    queueScope('Workspace');
+    await setDefine({ name: 'MP4', on: true });
+    expect(lastWrite()).toEqual(['MP4']);
   });
 });
 
