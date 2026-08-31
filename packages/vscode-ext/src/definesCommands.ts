@@ -119,6 +119,14 @@ async function askServer(log?: Logger) {
 /** Writes one line to the extension's output channel, when there is one. */
 export type Logger = (message: string) => void;
 
+/** Internal command carried by B170 LSP code actions (not a palette entry). */
+export const DEFINE_SET_COMMAND_ID = 'openplanetLsp.defines.set';
+
+export interface SetDefineRequest {
+  name: string;
+  on: boolean;
+}
+
 interface ScopeItem extends vscode.QuickPickItem {
   scope: DefinesScope;
 }
@@ -377,6 +385,72 @@ export async function addDefine(log?: Logger, presetScope?: DefinesScope): Promi
         ? `\`${parsed.name}\` is already ${parsed.on ? 'on' : 'off'} without an override, ` +
             'so no setting was written.'
         : `openplanetLsp.defines already says that; nothing was written.`,
+    );
+    return;
+  }
+  await writeDefines(scope, next, log);
+}
+
+/**
+ * Apply the literal state requested by a contextual `#if` code action.
+ *
+ * The server identifies the token and desired state; the extension remains
+ * the only layer that mutates VS Code settings. This deliberately reuses the
+ * same resolved-state, scope, platform-family and minimal-override seams as
+ * the palette commands instead of giving code actions a second config model.
+ */
+export async function setDefine(request: unknown, log?: Logger): Promise<void> {
+  if (
+    typeof request !== 'object' ||
+    request === null ||
+    typeof (request as Partial<SetDefineRequest>).name !== 'string' ||
+    typeof (request as Partial<SetDefineRequest>).on !== 'boolean'
+  ) {
+    log?.('[defines] ignored malformed contextual define command');
+    return;
+  }
+
+  const { name, on } = request as SetDefineRequest;
+  // The server sends a preprocessor identifier, never a raw `-NAME` entry.
+  // Keep this boundary strict so a foreign client cannot smuggle whitespace
+  // or a second override through the command argument.
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+    log?.(`[defines] ignored invalid contextual define name: ${JSON.stringify(name)}`);
+    return;
+  }
+
+  const resolved = await askServer(log);
+  const target = resolved?.gameTarget || gameTarget();
+  const families = resolved?.platformFamilies;
+  const issue = validateDefineEntry(on ? name : `-${name}`, target, families);
+  if (issue?.severity === 'error') {
+    void vscode.window.showErrorMessage(issue.message);
+    return;
+  }
+  if (issue?.severity === 'warning') {
+    const choice = await vscode.window.showWarningMessage(
+      issue.message,
+      { modal: true },
+      'Continue',
+    );
+    if (choice !== 'Continue') return;
+  }
+
+  const scope = await pickScope(`${on ? 'Enable' : 'Disable'} Define`);
+  if (!scope) return;
+
+  const entries = baseEntriesForScope(inspectDefines(), scope);
+  const derived = new Map(resolved?.defines.map((d) => [d.name, d.derivedActive]) ?? []);
+  const next = applyDefineEdit(entries, {
+    name,
+    on,
+    derivedOn: derived.get(name),
+    gameTarget: resolved?.gameTarget,
+    platformFamilies: resolved?.platformFamilies,
+  });
+  if (next.length === entries.length && next.every((entry, index) => entry === entries[index])) {
+    void vscode.window.showInformationMessage(
+      `\`${name}\` is already ${on ? 'on' : 'off'}; no setting was written.`,
     );
     return;
   }
