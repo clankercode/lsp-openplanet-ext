@@ -29,8 +29,8 @@ channel (_Output → Openplanet LSP_) shows exactly what was tried.
 | `openplanetLsp.unused`          | `""`          | How unused declarations are reported.              |
 | `openplanetLsp.inactiveRegions` | `""`          | Grey out `#if` branches your defines switch off.   |
 
-**Precedence:** the server layers configuration as auto-detect → workspace
-`.openplanet-lsp.toml` → user config → VS Code settings. The extension only forwards
+**Precedence:** the server layers configuration as auto-detect → user config →
+parent workspace `.openplanet-lsp.toml` → plugin `.openplanet-lsp.toml` → VS Code settings. The extension only forwards
 settings you actually set (non-empty); anything left at its default is **not** sent, so a
 repo's `.openplanet-lsp.toml` stays in control for your teammates.
 
@@ -146,6 +146,27 @@ probes taken when a server starts. It never polls.
 
 Functionality is limited in untrusted workspaces: the server reads workspace files, and
 `openplanetLsp.serverPath` can point at any executable — review it before trusting.
+
+## Editor support
+
+The same [openplanet-lsp server](https://github.com/clankercode/lsp-openplanet)
+works across these editors:
+
+| Editor                    | Integration                                                                               |
+| ------------------------- | ----------------------------------------------------------------------------------------- |
+| VS Code, VSCodium, Cursor | This extension                                                                            |
+| Sublime Text              | [LSP package client](https://github.com/clankercode/lsp-openplanet-sublime)               |
+| Neovim                    | [Lua plugin and filetype detection](https://github.com/clankercode/lsp-openplanet-neovim) |
+| Zed                       | [Native extension](https://github.com/clankercode/lsp-openplanet-zed)                     |
+| JetBrains IDEs            | [LSP4IJ integration](https://github.com/clankercode/lsp-openplanet-jetbrains)             |
+| Helix                     | [Language configuration](https://github.com/clankercode/lsp-openplanet-helix)             |
+| Emacs                     | [Eglot and lsp-mode integration](https://github.com/clankercode/lsp-openplanet-emacs)     |
+
+Each repository includes installation, configuration, troubleshooting, and editor
+verification notes. The server can be installed with `npm install -g openplanet-lsp`,
+`cargo install openplanet-lsp`, or an archive from its GitHub Releases. Clients
+launch `openplanet-lsp --lsp` over stdio. Keep shared plugin settings in
+`.openplanet-lsp.toml`; `.as` files are AngelScript and `info.toml` remains TOML.
 
 ## License
 
